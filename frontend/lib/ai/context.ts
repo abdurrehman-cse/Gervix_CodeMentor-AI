@@ -1,0 +1,7 @@
+import type { MentorContext } from "../types";
+import { validPath } from "../workspace";
+export function validContext(value: unknown): value is MentorContext {
+  if (!value || typeof value !== "object") return false;
+  const input = value as MentorContext;
+  return ["analyze", "chat", "explain", "optimize", "hint", "complexity", "tests"].includes(input.action) && Array.isArray(input.files) && input.files.length <= 200 && input.files.every(file => file && typeof file.path === "string" && validPath(file.path) && typeof file.content === "string" && ["file", "folder"].includes(file.kind)) && new Set(input.files.map(file => file.path)).size === input.files.length && input.files.some(file => file.path === input.activeFile && file.kind === "file") && !!input.selection && typeof input.selection.text === "string" && Number.isInteger(input.selection.startLine) && input.selection.startLine > 0 && Number.isInteger(input.selection.endLine) && input.selection.endLine >= input.selection.startLine && Number.isInteger(input.line) && input.line > 0 && typeof input.question === "string" && input.question.length <= 4000 && Array.isArray(input.messages) && input.messages.length <= 20 && input.messages.every(message => message && ["user", "assistant"].includes(message.role) && typeof message.content === "string") && Array.isArray(input.diagnostics) && Array.isArray(input.tests) && Array.isArray(input.results) && ["learning", "direct"].includes(input.mode) && ["beginner", "intermediate", "advanced"].includes(input.level);
+}

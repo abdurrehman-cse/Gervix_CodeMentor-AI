@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env*
+!.env.example
+*.tsbuildinfo
+frontend/public/monaco/
+frontend/test-artifacts/
+frontend/next-env.d.ts
+frontend/AGENTS.md
+frontend/CLAUDE.md

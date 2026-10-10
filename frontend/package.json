@@ -1,0 +1,26 @@
+{
+  "name": "codementor-ai",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "node scripts/prepare-monaco.cjs",
+    "dev": "next dev",
+    "prebuild": "node scripts/prepare-monaco.cjs",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.cjs"
+  },
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@monaco-editor/react": "^4.7.0",
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  }
+}
