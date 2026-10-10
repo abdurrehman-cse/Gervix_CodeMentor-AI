@@ -38,7 +38,7 @@ Without credentials, the app clearly labels local checks: compiler diagnostics, 
 5. Generate and run tests; the sum-contract cases expose the bug and pass after the fix.
 6. Analyze complexity: the sample has estimated O(n) time and O(1) auxiliary space.
 
-Explorer supports nested paths, folders, rename/delete, right-click actions, multiple tabs, search, and collapse. Drafts and sidebar state persist in local storage. Save marks the current draft as saved; Download exports it. Ctrl/Cmd+S saves, Ctrl/Cmd+Enter analyzes, Ctrl/Cmd+Shift+Enter runs; Monaco provides find, folding, suggestions, and undo.
+Explorer supports inline file/folder creation and rename, custom delete confirmation, right-click actions, multiple tabs, search, and collapse. Enter commits a name, Escape cancels, and leaving a valid inline input cancels. Creation accepts `/`-separated nested paths and explicitly creates intermediate folders; rename accepts a single name. Names are trimmed and validated, including case-insensitive sibling collisions and reserved device names. New files open automatically; new folders become the selected location. Folder expansion, drafts, tabs, and sidebar state persist in local storage. Delete warns about nested contents and unsaved edits. Save marks the current draft as saved; Download exports it. F2 renames a focused tree item, Delete opens confirmation, arrow keys navigate the tree, and Shift+F10 opens its context menu. Ctrl/Cmd+S saves, Ctrl/Cmd+Enter analyzes, Ctrl/Cmd+Shift+Enter runs; Monaco provides find, folding, suggestions, and undo.
 
 Execution supports standalone JavaScript and TypeScript functions, including async returned promises. Imports/exports are currently rejected by the runner, while mentoring and compiler checks understand virtual project imports. Code runs in a worker inside an opaque sandboxed iframe with network access blocked by CSP, bounded console output, cancellation, and a three-second timeout. Student code is never executed on the server. This MVP limits execution time and output, not process-level memory; it is intended for local student exercises.
 
@@ -47,12 +47,12 @@ Execution supports standalone JavaScript and TypeScript functions, including asy
 ```sh
 cd backend
 go test ./...
-# frontend
+cd ../frontend
 npm run typecheck
 npm test
 npm run build
 ```
 
-Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs`. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
+Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs` checks the mentor flow and `node scripts/explorer-smoke.cjs` checks file operations, validation, keyboard focus, custom deletion, persistence, and absence of native dialogs. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
 
 Hackathon rules supplied by the organizer require project creation during the official 24-hour period. Treat this advance scaffold as practice unless organizers allow reuse.

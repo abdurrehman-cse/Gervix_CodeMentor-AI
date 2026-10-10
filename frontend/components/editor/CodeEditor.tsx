@@ -20,7 +20,7 @@ export default function CodeEditor(props: Props) {
   }
   useEffect(markers, [props.problems, props.file.path]);
   useEffect(() => () => { disposables.current.forEach(item => item.dispose()); }, []);
-  return <Editor path={`file:///${props.file.path}`} language={language(props.file.path)} value={props.file.content} theme="vs-dark" loading={<p>Loading editor…</p>} onChange={value => props.onChange(value || "")} onMount={(instance, monaco) => {
+  return <Editor path={`file:///codementor/${props.file.id}`} language={language(props.file.path)} value={props.file.content} theme="vs-dark" loading={<p>Loading editor…</p>} onChange={value => props.onChange(value || "")} onMount={(instance, monaco) => {
     instanceRef.current = instance; monacoRef.current = monaco; latest.current.onMount(instance);
     disposables.current.push(instance.onDidChangeModel(markers));
     disposables.current.push(instance.onDidChangeCursorSelection(event => { const model = instance.getModel(); latest.current.onSelection(model?.getValueInRange(event.selection) || "", event.selection.startLineNumber, event.selection.endLineNumber, event.selection.positionLineNumber); }));

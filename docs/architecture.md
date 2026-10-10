@@ -5,9 +5,10 @@ The original dark workspace, Explorer, Monaco editor, Mentor Panel, onboarding, 
 | Module | Responsibility |
 | --- | --- |
 | `app/page.tsx` | Compose components, capture selection and cursor, coordinate analysis and execution, invalidate stale feedback |
-| `lib/use-workspace.ts` | Virtual files, nested paths, rename/delete, tabs, drafts, sidebar persistence, download |
+| `lib/use-workspace.ts` | Atomic workspace snapshots, tabs, drafts, tree/sidebar persistence, download |
+| `lib/workspace-operations.ts` | Validated creation/rename/deletion, nested paths, sibling conflicts, descendant cleanup, safe restoration |
 | `components/editor/CodeEditor.tsx` | Monaco models, severity markers, educational hovers, selection actions, shortcuts |
-| `components/explorer/Explorer.tsx` | Tree, search, folder expansion, context menus |
+| `components/explorer/` | Keyboard-accessible tree, search, persistent folder expansion, viewport-safe menus, inline name editing, custom delete confirmation |
 | `components/mentor/MentorPanel.tsx` | Problem teaching, progressive hints, explicit solution reveal, chat, cancellation |
 | `components/editor/BottomPanel.tsx` | Resizable Problems, Output, Tests, and Complexity tabs |
 | `lib/ai/provider.ts` | Server-only configurable provider adapter, response validation, timeout and cancellation |

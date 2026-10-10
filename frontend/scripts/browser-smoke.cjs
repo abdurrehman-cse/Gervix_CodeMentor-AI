@@ -56,8 +56,9 @@ async function main() {
     console.log("PASS: file draft and sidebar state survive refresh");
     await page.getByRole("button", { name: "Toggle Explorer", exact: true }).click();
     await page.getByRole("button", { name: "New file or folder" }).click();
-    page.once("dialog", dialog => dialog.accept("src/algorithms/double.ts"));
     await page.getByRole("menuitem", { name: "New file", exact: true }).click();
+    await page.getByRole("textbox", { name: "New file name", exact: true }).fill("src/algorithms/double.ts");
+    await page.getByRole("textbox", { name: "New file name", exact: true }).press("Enter");
     await page.getByRole("tab", { name: "double.ts" }).waitFor();
     await page.locator(".monaco-editor").click({ position: { x: 140, y: 50 } });
     await page.keyboard.press("Control+KeyA");
@@ -65,9 +66,10 @@ async function main() {
     await page.getByRole("button", { name: "▷ Run", exact: true }).click();
     await page.waitForFunction(() => document.querySelector(".panel-body pre")?.textContent?.trim() === "8");
     console.log("PASS: nested file creation and TypeScript execution");
-    await page.getByRole("button", { name: /TS double.ts/ }).click({ button: "right" });
-    page.once("dialog", dialog => dialog.accept("twice.ts"));
+    await page.getByRole("treeitem", { name: "double.ts", exact: true }).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await page.getByRole("textbox", { name: "Rename file", exact: true }).fill("twice.ts");
+    await page.getByRole("textbox", { name: "Rename file", exact: true }).press("Enter");
     await page.getByRole("tab", { name: "twice.ts" }).waitFor();
     console.log("PASS: Explorer rename preserves tab and file contents");
     await page.locator(".monaco-editor").click({ position: { x: 140, y: 50 } });
