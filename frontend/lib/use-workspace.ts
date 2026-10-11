@@ -55,7 +55,7 @@ export function useWorkspace() {
   function create(parent: string, kind: "file" | "folder", name: string) { return operation(createItem(snapshot.current, parent, kind, name)); }
   function rename(id: string, name: string) { return operation(renameItem(snapshot.current, id, name)); }
   function remove(id: string) { return operation(deleteItem(snapshot.current, id)); }
-  function edit(content: string) { const current = snapshot.current; update({ ...current, files: current.files.map(file => file.id === current.activeId ? { ...file, content } : file) }); }
+  function edit(content: string) { const current = snapshot.current; if (!current.files.some(file => file.id === current.activeId && file.content !== content)) return false; update({ ...current, files: current.files.map(file => file.id === current.activeId ? { ...file, content } : file) }); return true; }
   function save() { const current = snapshot.current; update({ ...current, files: current.files.map(file => file.id === current.activeId ? { ...file, saved: file.content } : file) }); }
   function setCollapsed(collapsed: boolean) { update({ ...snapshot.current, collapsed }); }
   const active = state.files.find(file => file.id === state.activeId && file.kind === "file");

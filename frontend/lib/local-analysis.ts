@@ -2,12 +2,13 @@ import ts from "typescript";
 import type { AIAnalysis, MentorContext, Problem, TestCase } from "./types";
 import { compilerDiagnostics } from "./diagnostics/compiler";
 import { estimateComplexity } from "./complexity/estimate";
+import { selectionContainsNode, selectionContainsRange } from "./selection-scope";
 
 export function localAnalysis(context: MentorContext): AIAnalysis {
   const code = context.files.find(file => file.path === context.activeFile)?.content || "";
   const source = ts.createSourceFile(context.activeFile, code, ts.ScriptTarget.Latest, true, /\.tsx?$/.test(context.activeFile) ? ts.ScriptKind.TS : ts.ScriptKind.JS);
   const problems: Problem[] = [];
-  const inSelection = (node: ts.Node) => !context.selection.text || (source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1 >= context.selection.startLine && source.getLineAndCharacterOfPosition(node.getEnd()).line + 1 <= context.selection.endLine);
+  const inSelection = (node: ts.Node) => selectionContainsNode(source, context.selection, node);
   function add(node: ts.Node, details: Omit<Problem, "id" | "file" | "line" | "column" | "endLine" | "endColumn">) {
     if (!inSelection(node)) return;
     const start = source.getLineAndCharacterOfPosition(node.getStart(source));
@@ -20,7 +21,7 @@ export function localAnalysis(context: MentorContext): AIAnalysis {
     const position = diagnostic.start ?? 0;
     const start = source.getLineAndCharacterOfPosition(position);
     const end = source.getLineAndCharacterOfPosition(position + (diagnostic.length || 1));
-    if (context.selection.text && (start.line + 1 < context.selection.startLine || end.line + 1 > context.selection.endLine)) continue;
+    if (!selectionContainsRange(source, context.selection, position, position + (diagnostic.length || 1))) continue;
     const syntax = parseDiagnostics.includes(diagnostic as ts.DiagnosticWithLocation);
     problems.push({ id: `compiler:${diagnostic.code}:${position}`, file: context.activeFile, severity: "error", line: start.line + 1, column: start.character + 1, endLine: end.line + 1, endColumn: end.character + 1, title: syntax ? "Syntax error" : "Compiler diagnostic", description: ts.flattenDiagnosticMessageText(diagnostic.messageText, " "), consequence: syntax ? "JavaScript cannot run until its syntax is valid." : "This operation conflicts with the values or names inferred by the compiler. Review the highlighted expression and verify your assumptions.", concept: syntax ? "Syntax" : "Names, types, and safe value access", hints: syntax ? ["Check the brackets and punctuation around this position."] : ["Trace where this value is declared and initialized.", "Check the value's type and whether it can be null or undefined.", "Compare this operation with the compiler's description."], question: syntax ? "Does each opening bracket have a closing bracket?" : "What values can reach this expression?" });
   }

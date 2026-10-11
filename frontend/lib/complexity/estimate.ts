@@ -1,14 +1,17 @@
 import ts from "typescript";
 import type { ComplexityAnalysis, MentorContext } from "../types";
+import { selectionContainsNode, selectionIntersectsNode } from "../selection-scope";
 export function estimateComplexity(source: ts.SourceFile, context: MentorContext): ComplexityAnalysis {
   const functions = source.statements.filter(ts.isFunctionDeclaration);
-  const root = functions.length === 1 && !context.selection.text ? functions[0].body || source : source;
+  const scopedFunctions = functions.filter(node => selectionIntersectsNode(source, context.selection, node));
+  const scopedFunction = scopedFunctions.length === 1 ? scopedFunctions[0] : undefined;
+  const root = scopedFunction?.body || source;
   const lines: number[] = [];
   const reasons: string[] = [];
-  let uncertain = functions.length > 1 && !context.selection.text;
+  let uncertain = scopedFunctions.length > 1;
   let allocations = false;
   let linearDepth = 0, logarithmicDepth = 0, highestLinear = 0, highestLogarithmic = 0;
-  function selected(node: ts.Node) { const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1; const end = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1; return !context.selection.text || start >= context.selection.startLine && end <= context.selection.endLine; }
+  function selected(node: ts.Node) { return selectionContainsNode(source, context.selection, node); }
   function visit(node: ts.Node) {
     if (node !== root && ts.isFunctionDeclaration(node)) { uncertain = true; return; }
     const loop = ts.isForStatement(node) || ts.isForOfStatement(node) || ts.isForInStatement(node) || ts.isWhileStatement(node) || ts.isDoStatement(node);
@@ -49,5 +52,5 @@ export function estimateComplexity(source: ts.SourceFile, context: MentorContext
   const logarithmic = highestLogarithmic === 0 ? "" : highestLogarithmic === 1 ? "log n" : `(log n)^${highestLogarithmic}`;
   const time = uncertain ? "Unknown" : `O(${[linear, logarithmic].filter(Boolean).join(" ") || "1"})`;
   const space = allocations || uncertain ? "Unknown" : "O(1)";
-  return { time, space, lines, explanation: `${root !== source ? `Scope: ${functions[0].name?.text || "current function"}.\n` : ""}${reasons.join("\n") || "No loops were found in this scope."}\n${uncertain ? "Calls, nested functions, or loop bounds prevent a confident local estimate." : `Combining nested traversal costs gives ${time}.`}${space === "O(1)" ? " Scalar bookkeeping uses constant auxiliary space, excluding the input." : " Inspect allocations and call depth to determine auxiliary space."}`, caveat: "Static estimate, not measured performance or a termination proof. Assumes valid inputs, progress toward termination, input-dependent bounds of size n, and constant-time primitive operations." };
+  return { time, space, lines, explanation: `${root !== source ? `Scope: ${scopedFunction?.name?.text || "current function"}${context.selection.text ? " (selected code)" : ""}.\n` : ""}${reasons.join("\n") || "No loops were found in this scope."}\n${uncertain ? "Calls, nested functions, or loop bounds prevent a confident local estimate." : `Combining nested traversal costs gives ${time}.`}${space === "O(1)" ? " Scalar bookkeeping uses constant auxiliary space, excluding the input." : " Inspect allocations and call depth to determine auxiliary space."}`, caveat: "Static estimate, not measured performance or a termination proof. Assumes valid inputs, progress toward termination, input-dependent bounds of size n, and constant-time primitive operations." };
 }

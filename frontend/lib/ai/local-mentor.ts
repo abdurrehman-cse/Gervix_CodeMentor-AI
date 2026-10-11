@@ -1,5 +1,6 @@
 import ts from "typescript";
 import { localAnalysis } from "../local-analysis";
+import { selectionContainsNode } from "../selection-scope";
 import type { AIAnalysis, MentorContext } from "../types";
 
 export function localMentor(context: MentorContext): AIAnalysis {
@@ -24,7 +25,7 @@ export function localMentor(context: MentorContext): AIAnalysis {
     const steps: string[] = [];
     function visit(node: ts.Node) {
       const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-      if (selected.selection.text && (line < selected.selection.startLine || line > selected.selection.endLine)) { ts.forEachChild(node, visit); return; }
+      if (!selectionContainsNode(source, selected.selection, node)) { ts.forEachChild(node, visit); return; }
       if (ts.isFunctionDeclaration(node)) steps.push(`Line ${line}: ${node.name?.text || "This function"} accepts ${node.parameters.map(parameter => parameter.name.getText(source)).join(", ") || "no parameters"}.`);
       if (ts.isVariableStatement(node)) steps.push(`Line ${line}: initialize ${node.declarationList.declarations.map(declaration => declaration.getText(source)).join(", ")}. These values establish the initial state.`);
       if (ts.isForStatement(node)) steps.push(`Line ${line}: repeat while ${node.condition?.getText(source) || "the loop has no condition"}; after each iteration, execute ${node.incrementor?.getText(source) || "no increment expression"}.`);

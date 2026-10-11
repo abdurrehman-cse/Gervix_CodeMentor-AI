@@ -53,6 +53,8 @@ npm test
 npm run build
 ```
 
-Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs` checks the mentor flow and `node scripts/explorer-smoke.cjs` checks file operations, validation, keyboard focus, custom deletion, persistence, and absence of native dialogs. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
+The Editor menu runs Monaco's Find, Replace, Go to Line, Format Document, Command Palette, and problem navigation commands. Ctrl/Cmd+F finds, Ctrl/Cmd+H replaces, Ctrl/Cmd+G goes to a line, Shift+Alt+F formats, F1 or Ctrl/Cmd+Shift+P opens the command palette, and F8/Shift+F8 navigates diagnostics. Selected-code guidance uses the actual editor range, including columns, without changing code. The toolbar reserves its space so selection never changes editor geometry mid-drag.
+
+Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs` checks the mentor flow, `node scripts/explorer-smoke.cjs` checks file operations and persistence, and `node scripts/editor-smoke.cjs` checks real mouse selection, clipboard operations, editor commands, contextual requests, and tab/view-state stability. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
 
 Hackathon rules supplied by the organizer require project creation during the official 24-hour period. Treat this advance scaffold as practice unless organizers allow reuse.

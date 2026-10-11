@@ -15,7 +15,7 @@ export type AIAnalysis = { problems: Problem[]; complexity: ComplexityAnalysis |
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 export type MentorContext = {
   action: string; files: Pick<FileNode, "path" | "kind" | "content">[]; activeFile: string;
-  selection: { text: string; startLine: number; endLine: number }; line: number;
+  selection: { text: string; startLine: number; endLine: number; startColumn?: number; endColumn?: number }; line: number;
   diagnostics: Problem[]; tests: TestCase[]; results: TestResult[]; complexity: ComplexityAnalysis | null;
   messages: ChatMessage[]; question: string; level: Level; mode: "learning" | "direct";
   previousDiagnostics?: Problem[]; output?: string[]; hintsUsed?: { problemId: string; count: number };

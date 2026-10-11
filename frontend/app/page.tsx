@@ -4,6 +4,10 @@ import "./workspace.css";
 import type { editor } from "monaco-editor";
 import Explorer, { type ExplorerHandle } from "../components/explorer/Explorer";
 import CodeEditor from "../components/editor/CodeEditor";
+import SelectionToolbar from "../components/editor/SelectionToolbar";
+import EditorTools from "../components/editor/EditorTools";
+import "../components/editor/editor.css";
+import { emptySelection, readEditorSelection } from "../lib/editor-selection";
 import BottomPanel, { type PanelTab } from "../components/editor/BottomPanel";
 import MentorPanel from "../components/mentor/MentorPanel";
 import { useWorkspace } from "../lib/use-workspace";
@@ -14,7 +18,6 @@ type FileSession = { code: string; path: string; analysis: AIAnalysis; results: 
 export default function Home() {
   const workspace = useWorkspace();
   const explorerRef = useRef<ExplorerHandle>(null);
-  const previousActiveId = useRef(workspace.activeId);
   function createFile() { workspace.setCollapsed(false); setSearch(false); explorerRef.current?.create("", "file"); }
   const { active } = workspace;
   const [level, setLevel] = useState<Level | null>(null);
@@ -24,7 +27,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState(false);
   const [tab, setTab] = useState<PanelTab>("Problems");
-  const [selection, setSelection] = useState({ text: "", startLine: 1, endLine: 1 });
+  const [selection, setSelection] = useState(emptySelection);
   const [line, setLine] = useState(1);
   const [selectedId, setSelectedId] = useState("");
   const [hintCounts, setHintCounts] = useState<Record<string, number>>({});
@@ -51,7 +54,7 @@ export default function Home() {
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
     return () => abortRef.current?.abort();
   }, []);
-  useEffect(() => { revision.current++; abortRef.current?.abort(); if (previousActiveId.current !== active?.id) { setSelection({ text: "", startLine: 1, endLine: 1 }); setLine(1); previousActiveId.current = active?.id || ""; } setSelectedId(""); setSolution(false); setFix(null); setError(""); const target = pendingJump.current; if (target && target.file === active?.path) { const timer = setTimeout(() => { jump(target.line, target.column); setSelectedId(target.id); pendingJump.current = null; }, 100); return () => clearTimeout(timer); } }, [active?.id, active?.path]);
+  useEffect(() => { revision.current++; abortRef.current?.abort(); setSelectedId(""); setSolution(false); setFix(null); setError(""); const target = pendingJump.current; if (target && target.file === active?.path) { const timer = setTimeout(() => { jump(target.line, target.column); setSelectedId(target.id); pendingJump.current = null; }, 100); return () => clearTimeout(timer); } }, [active?.id, active?.path]);
   useEffect(() => { setSessions(current => { const retained = Object.fromEntries(Object.entries(current).filter(([id]) => workspace.files.some(file => file.id === id))); return Object.keys(retained).length === Object.keys(current).length ? current : retained; }); }, [workspace.files]);
   function choose(value: Level) { setLevel(value); try { localStorage.setItem("codementor-level", value); } catch {} }
   function jump(targetLine: number, column = 1) { const instance = editorRef.current; instance?.revealLineInCenter(targetLine); instance?.setPosition({ lineNumber: targetLine, column }); instance?.focus(); }
@@ -67,9 +70,10 @@ export default function Home() {
     else jump(item.line, item.column);
     setSelectedId(item.id); setSolution(false); setTab("Problems");
   }
-  function edit(code: string) { if (code === active?.content) return; revision.current++; abortRef.current?.abort(); workspace.edit(code); setFix(null); setSolution(false); }
+  function edit(code: string) { if (!workspace.edit(code)) return; revision.current++; abortRef.current?.abort(); setFix(null); setSolution(false); }
   function context(action: string, question: string): MentorContext {
-    return { action, question, files: workspace.files.map(({ path, kind, content }) => ({ path, kind, content })), activeFile: active!.path, selection, line, diagnostics: analysis?.problems || [], previousDiagnostics: session?.analysis.problems || [], output: fresh ? session?.output || [] : [], hintsUsed: { problemId: problem?.id || "", count: hintCount }, tests: analysis?.tests || [], results, complexity: analysis?.complexity || null, messages: messages.slice(-16), level: level || "beginner", mode };
+    const current = readEditorSelection(editorRef.current);
+    return { action, question, files: workspace.files.map(({ path, kind, content }) => ({ path, kind, content })), activeFile: active!.path, selection: current.selection, line: current.line, diagnostics: analysis?.problems || [], previousDiagnostics: session?.analysis.problems || [], output: fresh ? session?.output || [] : [], hintsUsed: { problemId: problem?.id || "", count: hintCount }, tests: analysis?.tests || [], results, complexity: analysis?.complexity || null, messages: messages.slice(-16), level: level || "beginner", mode };
   }
   async function ask(action: string, question = "") {
     if (!active || busyRef.current || !supported) return;
@@ -103,10 +107,17 @@ export default function Home() {
   function editorAction(action: string, item?: Problem) {
     if (action === "view" && item) viewProblem(item);
     else if (action === "fix" && item) setFix(item);
-    else if (action === "hint") { if (selection.text && !item) void ask("hint", "Give me the next progressive hint about the selected code."); else hint(item); }
+    else if (action === "hint") { if (readEditorSelection(editorRef.current).selection.text && !item) void ask("hint", "Give me the next progressive hint about the selected code."); else hint(item); }
     else if (action === "run") void run();
     else if (action === "chat") { document.querySelector<HTMLTextAreaElement>(".mentor-chat textarea")?.focus(); }
     else void ask(action, action === "explain" ? "Explain the selected code step by step." : action === "optimize" ? "Explain how to improve this code's efficiency and the tradeoffs. Teach me before suggesting changes." : "");
+  }
+  async function editorCommand(command: string) {
+    const instance = editorRef.current;
+    const action = instance?.getAction(command);
+    if (!instance || !action || !action.isSupported()) { setError("This editor command is not available for the current file."); return; }
+    instance.focus();
+    try { await action.run(); } catch { setError("The editor command could not complete. Your code is safe; try again."); }
   }
   function applyFix() {
     const model = editorRef.current?.getModel();
@@ -131,7 +142,7 @@ export default function Home() {
   }
   return <main><header><strong><span className="logo">〈/〉</span> CodeMentor <em>AI</em></strong><span className="muted">Your thinking. A little guidance.</span><button className="mode-button" onClick={() => { const next = mode === "learning" ? "direct" : "learning"; setMode(next); try { localStorage.setItem("codementor-mode", next); } catch {} }}>{mode === "learning" ? "Learning mode" : "Direct mode"}</button><button onClick={() => setLevel(null)}>{level || "Choose level"} ⚙</button></header>
     <div className={`workspace ${workspace.collapsed ? "sidebar-collapsed" : ""}`}><nav className="activity" aria-label="Workspace tools"><button title="Toggle Explorer" aria-label="Toggle Explorer" aria-expanded={!workspace.collapsed} onClick={() => { workspace.setCollapsed(!workspace.collapsed); setSearch(false); }}>▤</button><button title="Search workspace" aria-label="Search workspace" onClick={() => { workspace.setCollapsed(false); setSearch(true); }}>⌕</button><button title="Problems" aria-label="Problems" onClick={() => setTab("Problems")}>⚑</button><button title="Tests" aria-label="Tests" onClick={() => setTab("Tests")}>✓</button></nav><div className="explorer-slot" aria-hidden={workspace.collapsed} inert={workspace.collapsed}><Explorer ref={explorerRef} files={workspace.files} activeId={workspace.activeId} selectedId={workspace.selectedId} closedIds={workspace.closedIds} ready={workspace.ready} onSelect={workspace.select} onToggle={workspace.toggleFolder} onOpen={workspace.open} onCreate={workspace.create} onRename={workspace.rename} onDelete={workspace.remove} search={search}/></div>
-    <section className="editor"><div className="tabs file-tabs" role="tablist" aria-label="Open files">{workspace.tabs.map(id => { const file = workspace.files.find(item => item.id === id); return file ? <div className={`file-tab ${id === workspace.activeId ? "selected" : ""}`} key={id}><button role="tab" aria-selected={id === workspace.activeId} onClick={() => workspace.open(id)}>{file.path.split("/").at(-1)}{file.content !== file.saved ? " •" : ""}</button><button aria-label={`Close ${file.path}`} onClick={() => workspace.close(id)}>×</button></div> : null; })}</div><div className="breadcrumb"><span>workspace / {active?.path || "No file open"}</span><div className="inline-actions"><button disabled={!active} onClick={workspace.save} title="Ctrl/Cmd+S">Save</button><button disabled={!active} onClick={workspace.download}>Download</button><button disabled={!supported || !!busy} onClick={() => void run()}>▷ Run</button></div></div>{selection.text && <div className="selection-actions"><small>Selected lines {selection.startLine}–{selection.endLine}</small>{["explain", "analyze", "hint", "complexity", "tests", "optimize", "chat"].map(action => <button disabled={!!busy} key={action} onClick={() => editorAction(action)}>{({ analyze: "Find Bug", chat: "Ask Mentor", tests: "Generate Tests" } as Record<string, string>)[action] || action}</button>)}</div>}<div className="editor-surface">{workspace.ready && active ? <CodeEditor file={active} problems={analysis?.problems || []} onChange={edit} onSelection={(text, startLine, endLine, currentLine) => { setSelection({ text, startLine, endLine }); setLine(currentLine); }} onAction={editorAction} onSave={workspace.save} onMount={instance => { editorRef.current = instance; }}/> : <div className="empty"><h3>{workspace.ready ? "Open a file to start learning." : "Restoring workspace…"}</h3><button onClick={createFile}>New File</button></div>}</div><BottomPanel tab={tab} onTab={setTab} analysis={analysis} output={fresh ? session?.output || [] : []} results={results} onProblem={viewProblem} onLine={jump} onRunTests={() => void run(true)} onGenerate={() => void ask("tests")} busy={!!busy || !supported}/></section>
+    <section className="editor"><div className="tabs file-tabs" role="tablist" aria-label="Open files">{workspace.tabs.map(id => { const file = workspace.files.find(item => item.id === id); return file ? <div className={`file-tab ${id === workspace.activeId ? "selected" : ""}`} key={id}><button role="tab" aria-selected={id === workspace.activeId} onClick={() => workspace.open(id)}>{file.path.split("/").at(-1)}{file.content !== file.saved ? " •" : ""}</button><button aria-label={`Close ${file.path}`} onClick={() => workspace.close(id)}>×</button></div> : null; })}</div><div className="breadcrumb"><span>workspace / {active?.path || "No file open"}</span><div className="inline-actions"><EditorTools disabled={!active} onCommand={command => void editorCommand(command)}/><button disabled={!active} onClick={workspace.save} title="Ctrl/Cmd+S">Save</button><button disabled={!active} onClick={workspace.download}>Download</button><button disabled={!supported || !!busy} onClick={() => void run()}>▷ Run</button></div></div><SelectionToolbar selection={selection} disabled={!!busy || !supported} onAction={editorAction}/><div className="editor-surface">{workspace.ready && active ? <CodeEditor file={active} problems={analysis?.problems || []} onChange={edit} onSelection={(next, currentLine) => { setSelection(current => JSON.stringify(current) === JSON.stringify(next) ? current : next); setLine(currentLine); }} onAction={editorAction} onSave={workspace.save} onMount={instance => { editorRef.current = instance; }}/> : <div className="empty"><h3>{workspace.ready ? "Open a file to start learning." : "Restoring workspace…"}</h3><button onClick={createFile}>New File</button></div>}</div><BottomPanel tab={tab} onTab={setTab} analysis={analysis} output={fresh ? session?.output || [] : []} results={results} onProblem={viewProblem} onLine={jump} onRunTests={() => void run(true)} onGenerate={() => void ask("tests")} busy={!!busy || !supported}/></section>
     <MentorPanel analysis={analysis} problem={problem} busy={busy} error={error || workspace.storageError} hintCount={hintCount} messages={messages} onAction={(action, question) => void ask(action, question)} onProblem={viewProblem} onHint={() => hint()} onFix={() => setFix(problem)} onSolution={() => setSolution(true)} onCancel={() => abortRef.current?.abort()} canAnalyze={supported && !!level && !!active?.content.trim()} showSolution={solution}/></div><footer>✓ Local workspace <span>{active ? language(active.path) : "No file"} &nbsp; Ln {line} &nbsp; UTF-8 &nbsp; {mode === "learning" ? "Learning mode" : "Direct mode"}</span></footer>
     {fix?.quickFix && <div className="overlay" onKeyDown={event => { if (event.key === "Escape") setFix(null); }}><section className="onboarding fix-dialog" role="dialog" aria-modal="true" aria-labelledby="fix-title"><h2 id="fix-title">Preview Quick Fix</h2><p>{fix.file} · Line {fix.line}. Only this range will change.</p><pre className="diff removed">− {fix.quickFix.oldCode}</pre><pre className="diff added">+ {fix.quickFix.newCode}</pre><div className="inline-actions"><button autoFocus className="primary" onClick={applyFix}>Apply Fix</button><button onClick={() => setFix(null)}>Cancel</button></div></section></div>}
     {workspace.ready && !level && <div className="overlay"><section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="welcome"><span className="eyebrow">WELCOME TO CODEMENTOR</span><h2 id="welcome">Where are you on your coding journey?</h2><p>Choose how much guidance you want. You can change this anytime.</p>{(["beginner", "intermediate", "advanced"] as Level[]).map((value, index) => <button autoFocus={index === 0} key={value} onClick={() => choose(value)}><strong>{["Beginner", "Intermediate", "Advanced"][index]}</strong><span>{["Explain concepts step by step with gentle hints.", "Keep explanations short and let me work out the fix.", "Give me the diagnostic and a minimal clue."][index]}</span></button>)}<small>Your workspace and learning preference stay on this device.</small></section></div>}

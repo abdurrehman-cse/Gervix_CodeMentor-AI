@@ -1,6 +1,7 @@
 # Verification status
 
-- `npm test`: 23 passing tests covering exact diagnostic/fix coordinates, observed sample test failures and corrections, comment/string false positives, selection coordinates, syntax and null/name errors, virtual imports, named-file mentoring, storage validation, cost estimates, AI adapter failures/cancellation, atomic file operations, reserved/invalid names, duplicates, nested creation, draft-preserving rename, descendant deletion, stale references, capacity limits, and corrupted-data restoration.
+- `npm test`: 29 passing tests covering exact diagnostic/fix coordinates, observed sample test failures and corrections, comment/string false positives, selection coordinates, syntax and null/name errors, virtual imports, named-file mentoring, storage validation, cost estimates, AI adapter failures/cancellation, atomic file operations, reserved/invalid names, duplicates, nested creation, draft-preserving rename, descendant deletion, stale references, capacity limits, corrupted-data restoration, live editor range snapshots, exact same-line selection filtering, selected-function complexity, and malformed column rejection.
+- `npm run typecheck`: strict TypeScript checks pass. No lint command is configured in this project.
 - `npm run build`: production compilation and strict TypeScript checks pass; `/`, `/api/mentor`, and `/api/compile` are generated.
 - `go test ./...`: the existing Go analyzer tests pass.
 - The final production browser smoke test passes: clickable diagnostic hover → educational details → hint → targeted fix → output `6`, seven passing generated tests, O(n)/O(1) estimates, refresh persistence, nested TypeScript creation, rename, awaited async output, blocked network/DOM/storage access, retained output before runtime failures, three-second termination, and cancellation. No page runtime errors were observed.
@@ -9,7 +10,11 @@
 
 `frontend/scripts/explorer-smoke.cjs` checks autofocus, empty/invalid/duplicate names, input retention after errors, repeated Enter, Escape/blur cancellation, nested paths, folder expansion and keyboard navigation, same filenames in different directories, extension changes, stable Monaco model/cursor/draft state during rename, custom deletion warnings and focus trapping, tab cleanup, refresh persistence, viewport-safe menus, the last-file empty state, and corrupted-storage recovery. It fails on native browser dialogs or page runtime errors.
 
-Both browser suites pass on the updated production Explorer. No native dialogs or page runtime errors were observed; the existing mentor demo and sandbox execution checks still pass.
+`frontend/scripts/editor-smoke.cjs` uses real mouse and keyboard input to check whole-function drag selection across comments, blank lines and the final line, double-click words, triple-click lines, Shift+click, Ctrl+A, clipboard copy/cut/paste, undo/redo, exact selected-text AI context, selection/scroll preservation across analysis and panel updates, unsaved per-file tabs, Find/Replace, Go to Line, formatting, command palette, diagnostic navigation, and native drag auto-scroll through a 92-line function.
+
+All three browser suites pass on the production build. No native dialogs or page runtime errors were observed; the existing mentor demo, Explorer operations, persistence, and sandbox execution checks still pass.
+
+The original selection failure was reproduced before changes: displaying the conditional selection toolbar moved Monaco down and reduced its height by 37 pixels during mouse drag. Monaco's mouse handler stops its move monitor when editor height changes, prematurely ending the selection. The toolbar now reserves a constant height even with no selection, removing the triggering layout change. Stable editor options and change callbacks, native model-owned edits, and model-specific view states avoid unnecessary resets. Actions read the live Monaco range rather than a stale React snapshot.
 
 The live external AI service requires server credentials and has not been tested against a real provider in this environment. Adapter tests use explicit mocked provider responses, including malformed JSON and failed requests. No external AI results are simulated in the product. Without a key, the UI labels its limited local analysis and mentoring.
 

@@ -1,29 +1,36 @@
 "use client";
 import dynamic from "next/dynamic";
 import { loader } from "@monaco-editor/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { editor, IDisposable, Position, Range } from "monaco-editor";
 import type { FileNode, Problem } from "../../lib/types";
 import { language } from "../../lib/workspace";
+import { readEditorSelection, type CodeSelection } from "../../lib/editor-selection";
 const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 loader.config({ paths: { vs: "/monaco/vs" } });
-type Props = { file: FileNode; problems: Problem[]; onChange: (code: string) => void; onSelection: (text: string, startLine: number, endLine: number, line: number) => void; onAction: (action: string, problem?: Problem) => void; onSave: () => void; onMount: (instance: editor.IStandaloneCodeEditor) => void };
+const editorOptions: editor.IStandaloneEditorConstructionOptions = { minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, scrollBeyondLastLine: false, automaticLayout: true, folding: true, bracketPairColorization: { enabled: true }, quickSuggestions: true, wordWrap: "off", ariaLabel: "Code editor" };
+type Props = { file: FileNode; problems: Problem[]; onChange: (code: string) => void; onSelection: (selection: CodeSelection, line: number) => void; onAction: (action: string, problem?: Problem) => void; onSave: () => void; onMount: (instance: editor.IStandaloneCodeEditor) => void };
 export default function CodeEditor(props: Props) {
   const latest = useRef(props); latest.current = props;
   const instanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
   const disposables = useRef<IDisposable[]>([]);
+  const change = useCallback((value: string | undefined) => latest.current.onChange(value || ""), []);
+  const markerSnapshot = JSON.stringify(props.problems);
+  function publishSelection() { const snapshot = readEditorSelection(instanceRef.current); latest.current.onSelection(snapshot.selection, snapshot.line); }
   function markers() {
     const monaco = monacoRef.current, model = instanceRef.current?.getModel();
     if (!monaco || !model) return;
     monaco.editor.setModelMarkers(model, "codementor", latest.current.problems.filter(problem => problem.file === latest.current.file.path).map(problem => ({ startLineNumber: problem.line, startColumn: problem.column, endLineNumber: problem.endLine, endColumn: problem.endColumn, message: `${problem.title}\n${problem.description}\n${problem.question}`, severity: problem.severity === "error" ? monaco.MarkerSeverity.Error : problem.severity === "warning" ? monaco.MarkerSeverity.Warning : problem.severity === "info" ? monaco.MarkerSeverity.Info : monaco.MarkerSeverity.Hint })));
   }
-  useEffect(markers, [props.problems, props.file.path]);
+  useEffect(markers, [markerSnapshot, props.file.path]);
+  useEffect(publishSelection, [props.file.id]);
   useEffect(() => () => { disposables.current.forEach(item => item.dispose()); }, []);
-  return <Editor path={`file:///codementor/${props.file.id}`} language={language(props.file.path)} value={props.file.content} theme="vs-dark" loading={<p>Loading editor…</p>} onChange={value => props.onChange(value || "")} onMount={(instance, monaco) => {
+  return <Editor path={`file:///codementor/${props.file.id}`} language={language(props.file.path)} defaultValue={props.file.content} theme="vs-dark" saveViewState options={editorOptions} loading={<p>Loading editor…</p>} onChange={change} onMount={(instance, monaco) => {
     instanceRef.current = instance; monacoRef.current = monaco; latest.current.onMount(instance);
     disposables.current.push(instance.onDidChangeModel(markers));
-    disposables.current.push(instance.onDidChangeCursorSelection(event => { const model = instance.getModel(); latest.current.onSelection(model?.getValueInRange(event.selection) || "", event.selection.startLineNumber, event.selection.endLineNumber, event.selection.positionLineNumber); }));
+    disposables.current.push(instance.onDidChangeCursorSelection(publishSelection));
+    instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => { void instance.getAction("editor.action.quickCommand")?.run(); });
     disposables.current.push(instance.addAction({ id: "codementor.save", label: "Save file", keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS], run: () => latest.current.onSave() }));
     disposables.current.push(instance.addAction({ id: "codementor.analyze-file", label: "Mentor: Analyze file", keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter], run: () => latest.current.onAction("analyze") }));
     disposables.current.push(instance.addAction({ id: "codementor.run-file", label: "Run current file", keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter], run: () => latest.current.onAction("run") }));
@@ -36,12 +43,13 @@ export default function CodeEditor(props: Props) {
       if (!problem) return null;
       const escape = (text: string) => text.replace(/[\\`*_{}\[\]<>]/g, "\\$&");
       const argument = encodeURIComponent(JSON.stringify([problem.id]));
-      return { range: new monaco.Range(problem.line, problem.column, problem.endLine, problem.endColumn), contents: [{ isTrusted: { enabledCommands: commands }, value: `**${escape(problem.title)}**\n\n${escape(problem.description)}\n\n${escape(problem.question)}\n\n[View Problem](command:${commands[0]}?${argument}) · [Hint](command:${commands[1]}?${argument})${problem.quickFix ? ` · [Quick Fix](command:${commands[2]}?${argument})` : ""}` }] };
+      return { range: new monaco.Range(problem.line, problem.column, problem.endLine, problem.endColumn), contents: [{ isTrusted: { enabledCommands: commands }, value: `**${problem.severity.toUpperCase()}: ${escape(problem.title)}**\n\n${escape(problem.description)}\n\n**Why it matters**\n\n${escape(problem.consequence)}\n\n**Concept:** ${escape(problem.concept)}\n\n${escape(problem.question)}\n\n[View Problem](command:${commands[0]}?${argument}) · [Hint](command:${commands[1]}?${argument})${problem.quickFix ? ` · [Quick Fix](command:${commands[2]}?${argument})` : ""}` }] };
     } }));
     for (const languageId of ["javascript", "typescript"]) disposables.current.push(monaco.languages.registerCodeActionProvider(languageId, { providedCodeActionKinds: ["quickfix"], provideCodeActions(model: editor.ITextModel, range: Range) {
       if (model !== instance.getModel()) return { actions: [], dispose() {} };
       return { actions: latest.current.problems.filter(problem => problem.file === latest.current.file.path && problem.quickFix && range.startLineNumber <= problem.endLine && range.endLineNumber >= problem.line).map(problem => ({ title: `Preview mentor fix: ${problem.title}`, kind: "quickfix", command: { id: commands[2], title: "Preview Quick Fix", arguments: [problem.id] } })), dispose() {} };
     } }));
     markers();
-  }} options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, scrollBeyondLastLine: false, automaticLayout: true, folding: true, bracketPairColorization: { enabled: true }, quickSuggestions: true, wordWrap: "off" }} />;
+    publishSelection();
+  }} />;
 }

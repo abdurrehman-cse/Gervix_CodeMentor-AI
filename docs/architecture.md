@@ -8,6 +8,9 @@ The original dark workspace, Explorer, Monaco editor, Mentor Panel, onboarding, 
 | `lib/use-workspace.ts` | Atomic workspace snapshots, tabs, drafts, tree/sidebar persistence, download |
 | `lib/workspace-operations.ts` | Validated creation/rename/deletion, nested paths, sibling conflicts, descendant cleanup, safe restoration |
 | `components/editor/CodeEditor.tsx` | Monaco models, severity markers, educational hovers, selection actions, shortcuts |
+| `components/editor/SelectionToolbar.tsx` | Fixed-height, focus-preserving contextual actions without mid-drag layout changes |
+| `components/editor/EditorTools.tsx` | Accessible menu invoking native Monaco editing and navigation commands |
+| `lib/editor-selection.ts`, `lib/selection-scope.ts` | Live Monaco range capture and column-aware source scoping |
 | `components/explorer/` | Keyboard-accessible tree, search, persistent folder expansion, viewport-safe menus, inline name editing, custom delete confirmation |
 | `components/mentor/MentorPanel.tsx` | Problem teaching, progressive hints, explicit solution reveal, chat, cancellation |
 | `components/editor/BottomPanel.tsx` | Resizable Problems, Output, Tests, and Complexity tabs |
@@ -22,7 +25,9 @@ The original dark workspace, Explorer, Monaco editor, Mentor Panel, onboarding, 
 
 ## Context and freshness
 
-Explicit mentor actions submit the workspace tree and source, active file, cursor, selected lines, current and previous diagnostics, hint usage, console output, conversation, tests, and observed results. AI credentials are server environment variables; the browser never receives them.
+Explicit mentor actions submit the workspace tree and source, active file, cursor, actual selected text with line/column bounds, current and previous diagnostics, hint usage, console output, conversation, tests, and observed results. AI credentials are server environment variables; the browser never receives them.
+
+Editor models use stable file IDs so renames preserve drafts, undo history, and view state. Monaco owns live edits; stable callbacks mirror them atomically into the workspace rather than rewriting the model from React during unrelated updates. The selection toolbar always reserves the same height because Monaco cancels active mouse-drag tracking on height changes.
 
 Requests carry a snapshot of file IDs, paths, kinds, and source. Responses are ignored if that snapshot or editor revision changes. Saving a draft does not alter its source signature. Edits abort pending analysis and execution. Existing test expectations survive edits, while observed results and stale diagnostic markers are cleared until refreshed. Source changes in another file also invalidate workspace-aware analysis.
 
