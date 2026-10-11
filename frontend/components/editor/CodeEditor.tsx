@@ -9,7 +9,7 @@ import { readEditorSelection, type CodeSelection } from "../../lib/editor-select
 const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 loader.config({ paths: { vs: "/monaco/vs" } });
 const editorOptions: editor.IStandaloneEditorConstructionOptions = { minimap: { enabled: false }, fontSize: 14, padding: { top: 20 }, scrollBeyondLastLine: false, automaticLayout: true, folding: true, bracketPairColorization: { enabled: true }, quickSuggestions: true, wordWrap: "off", ariaLabel: "Code editor" };
-type Props = { file: FileNode; problems: Problem[]; onChange: (code: string) => void; onSelection: (selection: CodeSelection, line: number) => void; onAction: (action: string, problem?: Problem) => void; onSave: () => void; onMount: (instance: editor.IStandaloneCodeEditor) => void };
+type Props = { file: FileNode; modelGeneration?: number; problems: Problem[]; onChange: (code: string) => void; onSelection: (selection: CodeSelection, line: number) => void; onAction: (action: string, problem?: Problem) => void; onSave: () => void; onMount: (instance: editor.IStandaloneCodeEditor) => void };
 export default function CodeEditor(props: Props) {
   const latest = useRef(props); latest.current = props;
   const instanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -24,9 +24,9 @@ export default function CodeEditor(props: Props) {
     monaco.editor.setModelMarkers(model, "codementor", latest.current.problems.filter(problem => problem.file === latest.current.file.path).map(problem => ({ startLineNumber: problem.line, startColumn: problem.column, endLineNumber: problem.endLine, endColumn: problem.endColumn, message: `${problem.title}\n${problem.description}\n${problem.question}`, severity: problem.severity === "error" ? monaco.MarkerSeverity.Error : problem.severity === "warning" ? monaco.MarkerSeverity.Warning : problem.severity === "info" ? monaco.MarkerSeverity.Info : monaco.MarkerSeverity.Hint })));
   }
   useEffect(markers, [markerSnapshot, props.file.path]);
-  useEffect(publishSelection, [props.file.id]);
+  useEffect(publishSelection, [props.file.id, props.modelGeneration]);
   useEffect(() => () => { disposables.current.forEach(item => item.dispose()); }, []);
-  return <Editor path={`file:///codementor/${props.file.id}`} language={language(props.file.path)} defaultValue={props.file.content} theme="vs-dark" saveViewState options={editorOptions} loading={<p>Loading editor…</p>} onChange={change} onMount={(instance, monaco) => {
+  return <Editor path={`file:///codementor/${props.file.id}${props.modelGeneration ? `?restore=${props.modelGeneration}` : ""}`} language={language(props.file.path)} defaultValue={props.file.content} theme="vs-dark" saveViewState options={editorOptions} loading={<p>Loading editor…</p>} onChange={change} onMount={(instance, monaco) => {
     instanceRef.current = instance; monacoRef.current = monaco; latest.current.onMount(instance);
     disposables.current.push(instance.onDidChangeModel(markers));
     disposables.current.push(instance.onDidChangeCursorSelection(publishSelection));

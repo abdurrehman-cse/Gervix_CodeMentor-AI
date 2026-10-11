@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import type { FileNode } from "./types";
 import { createItem, deleteItem, initialWorkspace, renameItem, restoreWorkspace, type WorkspaceResult, type WorkspaceState } from "./workspace-operations";
 
 export function useWorkspace() {
   const [state, setState] = useState<WorkspaceState>(initialWorkspace);
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState("");
+  const [modelGeneration, setModelGeneration] = useState(0);
   const snapshot = useRef(state);
   function update(next: WorkspaceState) { snapshot.current = next; setState(next); }
   useEffect(() => {
@@ -58,11 +60,19 @@ export function useWorkspace() {
   function edit(content: string) { const current = snapshot.current; if (!current.files.some(file => file.id === current.activeId && file.content !== content)) return false; update({ ...current, files: current.files.map(file => file.id === current.activeId ? { ...file, content } : file) }); return true; }
   function save() { const current = snapshot.current; update({ ...current, files: current.files.map(file => file.id === current.activeId ? { ...file, saved: file.content } : file) }); }
   function setCollapsed(collapsed: boolean) { update({ ...snapshot.current, collapsed }); }
+  function replaceFiles(files: FileNode[], activePath: string) {
+    const copied = files.map(file => ({ ...file }));
+    const activeId = copied.find(file => file.kind === "file" && file.path === activePath)?.id || copied.find(file => file.kind === "file")?.id || "";
+    const next = restoreWorkspace({ ...snapshot.current, files: copied, activeId, tabs: activeId ? [activeId] : [], selectedId: activeId, closedIds: [] });
+    if (!next) throw new Error("The saved workspace could not be restored.");
+    update(next);
+    setModelGeneration(current => current + 1);
+  }
   const active = state.files.find(file => file.id === state.activeId && file.kind === "file");
   function download() {
     if (!active) return;
     const url = URL.createObjectURL(new Blob([active.content], { type: "text/plain" }));
     const link = document.createElement("a"); link.href = url; link.download = active.path.split("/").at(-1)!; link.click(); URL.revokeObjectURL(url);
   }
-  return { ...state, active, ready, storageError, setCollapsed, open, close, select, toggleFolder, create, rename, remove, edit, save, download };
+  return { ...state, active, ready, storageError, modelGeneration, setCollapsed, open, close, select, toggleFolder, create, rename, remove, edit, save, download, replaceFiles, getSnapshot: () => snapshot.current };
 }

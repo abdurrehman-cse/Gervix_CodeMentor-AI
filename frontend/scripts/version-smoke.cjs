@@ -1,0 +1,131 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { chromium } = require(process.env.CODEMENTOR_PLAYWRIGHT || "playwright");
+process.env.PATH = `${process.env.SystemRoot || "C:\\Windows"}\\System32;${process.env.PATH || ""}`;
+const deadline = setTimeout(() => process.exit(2), 240000); deadline.unref();
+async function main() {
+  let browser;
+  try { browser = await chromium.launch({ headless: true }); } catch { browser = await chromium.launch({ headless: true, channel: "msedge" }); }
+  const context = await browser.newContext({ viewport: { width: 1500, height: 1050 }, permissions: ["clipboard-read", "clipboard-write"] });
+  const page = await context.newPage();
+  const errors = [], requests = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("dialog", async dialog => { errors.push(`Native dialog: ${dialog.type()}`); await dialog.dismiss(); });
+  page.on("request", request => { if (request.url().endsWith("/api/mentor") && request.method() === "POST") requests.push(request.postDataJSON()); });
+  async function state() { return page.evaluate(() => new Promise(resolve => window.require(["vs/editor/editor.main"], monaco => resolve(monaco.editor.getEditors().find(editor => editor.getDomNode()?.isConnected)?.getValue())))); }
+  async function history() { return page.evaluate(() => JSON.parse(localStorage.getItem("codementor-versions-v1") || "[]")); }
+  async function wait(predicate, message) { const until = Date.now() + 30000; while (Date.now() < until) { if (await predicate()) return; await page.waitForTimeout(50); } assert.fail(message); }
+  async function write(code) { await page.locator(".monaco-editor").click({ position: { x: 160, y: 70 } }); await page.keyboard.press("Control+KeyA"); await page.evaluate(code => navigator.clipboard.writeText(code), code); await page.keyboard.press("Control+KeyV"); await wait(async () => (await state()) === code, "Paste must update the working source"); await page.keyboard.press("Control+Home"); }
+  async function submit(version) { await page.getByRole("button", { name: "Submit for Review", exact: true }).click(); await wait(async () => (await page.locator(".review-status").textContent()).includes(`Analysis current · v${version}`), `v${version} must finish against its snapshot`); }
+  try {
+    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000");
+    await page.getByRole("button", { name: "Beginner", exact: false }).click();
+    await page.locator(".monaco-editor .view-lines").waitFor();
+    const original = await state();
+    await page.getByRole("button", { name: "▷ Run", exact: true }).click();
+    await wait(async () => !(await page.locator(".mentor").textContent()).includes("Working on run"), "Execution must complete independently of review");
+    assert.ok((await page.locator(".review-status").textContent()).includes("Not reviewed"));
+    assert.equal(await page.locator(".provider-label").count(), 0);
+    await submit(1);
+    await page.locator(".squiggly-warning").first().waitFor();
+    await page.getByRole("button", { name: "Give me a hint", exact: false }).click();
+    assert.ok(await page.getByText("HINT 1", { exact: true }).isVisible());
+    await page.locator(".mentor .coming").getByRole("button", { name: "Generate Test Cases", exact: false }).click();
+    await wait(async () => !(await page.locator(".mentor").textContent()).includes("Working on tests"), "Test generation must complete");
+    const first = (await history())[0];
+    assert.equal(first.version, 1);
+    assert.ok(first.reviews.some(review => review.analysis?.tests.every(test => test.provenance.version === 1) && review.analysis.tests.length));
+    await page.getByRole("button", { name: "Run Tests", exact: true }).click();
+    await wait(async () => (await history())[0].reviews.some(review => review.results?.length), "Broken v1 must produce actual results");
+    assert.ok((await history())[0].reviews.find(review => review.results?.length).results.some(result => !result.passed));
+    console.log("PASS: v1 snapshot, exact bug, progressive hint and version-tagged generated tests with real failing execution");
+    await page.locator(".mentor article").getByRole("button", { name: "Quick Fix", exact: true }).click();
+    const rewritten = original.replace("<=", "<").replace(/\bi\b/g, "index");
+    await page.evaluate(code => new Promise(resolve => window.require(["vs/editor/editor.main"], monaco => { const editor = monaco.editor.getEditors().find(editor => editor.getDomNode()?.isConnected); editor.executeEdits("test-edit", [{ range: editor.getModel().getFullModelRange(), text: code }]); resolve(); })), rewritten);
+    await page.getByRole("button", { name: "Apply Fix", exact: true }).waitFor({ state: "hidden" });
+    assert.equal(await state(), rewritten);
+    assert.ok((await page.locator(".review-status").textContent()).includes("Analysis outdated"));
+    assert.equal(await page.getByRole("button", { name: "Run Tests", exact: true }).isDisabled(), true);
+    await submit(2);
+    assert.equal((await history()).length, 2);
+    assert.equal((await history())[0].files[0].content, original);
+    assert.equal((await history())[1].files[0].content, rewritten);
+    await submit(2); assert.equal((await history()).length, 2);
+    console.log("PASS: edits invalidate analysis/tests and dismiss obsolete fix preview; v2 is immutable and unchanged submit does not create duplicates");
+    let release;
+    let captured;
+    const gate = new Promise(resolve => { release = resolve; });
+    await page.route("**/api/mentor", async route => {
+      const request = route.request().postDataJSON();
+      if (request.action === "analyze" && request.provenance.version === 2) {
+        const response = await route.fetch(); captured = await response.json(); await gate;
+        await route.fulfill({ response, json: captured }).catch(() => {});
+      } else await route.continue();
+    });
+    await page.getByRole("button", { name: "Reanalyze Latest Code", exact: true }).click();
+    await wait(() => !!captured, "Slow older v2 response must be held");
+    const latest = "function sum(numbers) {\n  if (numbers.length === 0) return 0;\n  let total = 0;\n  for (const number of numbers) { total += number; }\n  return total;\n}\nconsole.log(sum([1, 2, 3]));";
+    await write(latest);
+    await submit(3);
+    release(); await page.waitForTimeout(500);
+    assert.ok((await page.locator(".review-status").textContent()).includes("Analysis current · v3"));
+    assert.equal(await state(), latest);
+    assert.ok((await history())[1].reviews.some(review => review.status === "outdated"));
+    assert.equal(requests.at(-1).provenance.version, 3);
+    assert.ok(requests.at(-1).previousDiagnostics.length === 0);
+    console.log("PASS: slower older v2 request cannot overwrite completed v3 or inject its diagnostics/context");
+    await page.locator(".mentor .coming").getByRole("button", { name: "Generate Test Cases", exact: false }).click();
+    await wait(async () => !(await page.locator(".mentor").textContent()).includes("Working on tests"), "Fresh v3 tests must finish");
+    await page.getByRole("button", { name: "Run Tests", exact: true }).click();
+    await wait(async () => (await history())[2].reviews.some(review => review.results?.length), "v3 must execute its own snapshot tests");
+    const latestResults = (await history())[2].reviews.find(review => review.results?.length).results;
+    assert.ok(latestResults.every(result => result.passed && result.provenance.version === 3));
+    await page.locator(".mentor .coming").getByRole("button", { name: "Complexity analysis", exact: false }).click();
+    await wait(async () => !(await page.locator(".mentor").textContent()).includes("Working on complexity"), "v3 complexity must complete");
+    assert.ok((await history())[2].reviews.some(review => review.analysis?.complexity?.time === "O(n)" && review.analysis.complexity.provenance.version === 3));
+    await page.getByRole("button", { name: "Version History", exact: true }).click();
+    await page.getByRole("combobox", { name: "Compare to version" }).selectOption((await history())[0].id);
+    const priorRuns = (await history())[0].reviews.filter(review => review.action === "run submitted tests").length;
+    await page.getByRole("button", { name: "Run submitted tests · v1", exact: true }).click();
+    await wait(async () => (await history())[0].reviews.filter(review => review.action === "run submitted tests").length > priorRuns, "Historical tests must run their original snapshot");
+    const oldResults = (await history())[0].reviews.filter(review => review.action === "run submitted tests").at(-1).results;
+    assert.ok(oldResults.every(result => result.provenance.version === 1));
+    assert.ok(oldResults.some(result => !result.passed));
+    assert.equal(await state(), latest);
+    await page.getByRole("combobox", { name: "Compare from version" }).selectOption((await history())[1].id);
+    await page.getByRole("combobox", { name: "Compare to version" }).selectOption((await history())[2].id);
+    assert.ok(await page.locator(".version-diffs .added").count()); assert.ok(await page.locator(".version-diffs .removed").count());
+    fs.mkdirSync(path.join(__dirname, "../test-artifacts"), { recursive: true });
+    await page.screenshot({ path: path.join(__dirname, "../test-artifacts/versions.png"), fullPage: true });
+    await page.getByRole("button", { name: "Close version history" }).click();
+    await page.reload(); await page.locator(".monaco-editor .view-lines").waitFor();
+    await wait(async () => (await page.locator(".review-status").textContent()).includes("Analysis current · v3"), "Review provenance must survive refresh");
+    assert.equal((await history()).length, 3);
+    console.log("PASS: fresh v3 tests pass, complexity is version-tagged, v2/v3 diffs highlight real changes, history/reviews survive refresh");
+    const draft = latest + "\nconst unsavedDraft = true;";
+    await write(draft);
+    await page.getByRole("button", { name: "Version History", exact: true }).click();
+    await page.getByRole("combobox", { name: "Compare to version" }).selectOption((await history())[0].id);
+    await page.getByRole("button", { name: "Restore v1", exact: true }).click();
+    await page.getByRole("button", { name: "Cancel restore", exact: true }).click();
+    assert.equal(await state(), draft);
+    await page.getByRole("button", { name: "Restore v1", exact: true }).click();
+    await page.getByRole("button", { name: "Preserve drafts and restore", exact: true }).click();
+    await page.getByRole("button", { name: "Close version history" }).waitFor({ state: "hidden" });
+    await wait(async () => (await state()) === original, "Restore must open a new model with original code");
+    const restored = await history();
+    assert.deepEqual(restored.map(item => item.version), [1, 2, 3, 4, 5]);
+    assert.equal(restored[3].origin, "restore-backup"); assert.equal(restored[3].files[0].content, draft);
+    assert.equal(restored[4].origin, "restore"); assert.equal(restored[4].files[0].content, original);
+    await page.reload(); await page.locator(".monaco-editor .view-lines").waitFor(); assert.equal(await state(), original);
+    console.log("PASS: restore cancellation preserves edits; confirmed restore first saves unsaved drafts, creates a new version and persists the restored working state");
+    await page.evaluate(() => { const original = Storage.prototype.setItem; Storage.prototype.setItem = function(key, value) { if (key === "codementor-versions-v1") throw new DOMException("Storage is full", "QuotaExceededError"); return original.call(this, key, value); }; });
+    await page.getByRole("button", { name: "Resubmit unchanged", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: "Version could not be saved" }).waitFor();
+    assert.equal((await history()).length, 5); assert.equal(await state(), original);
+    console.log("PASS: storage failure cannot create phantom versions or destroy working code");
+    assert.deepEqual(errors, []);
+  } finally { await Promise.race([browser.close(), new Promise(resolve => setTimeout(resolve, 5000))]); }
+}
+main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });

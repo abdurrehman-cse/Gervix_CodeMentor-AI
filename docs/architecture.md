@@ -22,6 +22,11 @@ The original dark workspace, Explorer, Monaco editor, Mentor Panel, onboarding, 
 | `lib/ai-validation.ts` | Validate diagnostic coordinates, exact fix ranges, real function names, and JSON test values |
 | `app/api/compile/route.ts` | Prepare standalone JS/TS without executing it; reject modules |
 | `lib/runner.ts` | Browser isolation, console capture, async execution, test comparisons, cancellation and timeout |
+| `lib/versions/snapshots.ts` | Immutable submissions, SHA-256 hashes, file versions, changes, provenance, validated history restoration |
+| `lib/versions/use-versions.ts` | Serialized captures and atomic local history persistence, including review records |
+| `lib/versions/dependencies.ts`, `guards.ts` | Relevant import/named-file scope, request freshness, full-snapshot fix guards |
+| `lib/versions/diff.ts` | Bounded line-level diffs with context |
+| `components/versions/` | Review status, history, comparisons, confirmed draft-preserving restore |
 
 ## Context and freshness
 
@@ -29,7 +34,13 @@ Explicit mentor actions submit the workspace tree and source, active file, curso
 
 Editor models use stable file IDs so renames preserve drafts, undo history, and view state. Monaco owns live edits; stable callbacks mirror them atomically into the workspace rather than rewriting the model from React during unrelated updates. The selection toolbar always reserves the same height because Monaco cancels active mouse-drag tracking on height changes.
 
-Requests carry a snapshot of file IDs, paths, kinds, and source. Responses are ignored if that snapshot or editor revision changes. Saving a draft does not alter its source signature. Edits abort pending analysis and execution. Existing test expectations survive edits, while observed results and stale diagnostic markers are cleared until refreshed. Source changes in another file also invalidate workspace-aware analysis.
+Every request captures a persisted submission before contacting the mentor API. Its provenance identifies the submission ID, monotonic version, full-workspace hash, active file, and hashes of the source files actually sent. The API requires provenance, verifies source checksums, validates generated artifacts against exact submitted coordinates and callable signatures, and stamps every artifact. Server keys remain private.
+
+Detected relative imports are followed recursively; named-file questions add their sources. Dynamic imports use conservative scope. Provenance checks compare relevant snapshot contents and newly resolved dependencies against the working tree. Unrelated files do not invalidate a current result. Requests also have monotonic sequence tokens and editor revisions: a late response cannot overwrite a newer request or clear its loading state. Edits abort pending analysis and execution. Stale diagnostics, hints, complexity, and quick fixes are not shown as current. Quick fixes additionally compare the complete live model against the submitted file before making their minimal edit.
+
+Generated tests retain their source version and are labeled unverified until actually executed. Outdated expectations are visible but disabled for draft execution; history can run them against their original immutable submission instead. The runner receives code and tests from one intended snapshot, never a mix of revisions. Actual outputs/results have separate provenance and are saved independently of generated expected values.
+
+Submissions and review records persist in `codementor-versions-v1`, independently of the existing workspace persistence. Unchanged captures are deduplicated unless explicitly forced. Save groups meaningful changes without tracking keystrokes. Restore writes a draft-preserving backup and a new restore submission before changing the working workspace. File identities remain stable; a restore-only model generation loads restored code without introducing controlled-value overwrites during normal editing. Storage failures never replace the working code. Checksummed history validates coordinates, signatures, versions, provenance, and execution records on refresh; interrupted reviews become cancelled.
 
 ## Execution boundaries
 

@@ -53,13 +53,21 @@ export function localAnalysis(context: MentorContext): AIAnalysis {
   function findSum(node: ts.Node) {
     if (ts.isFunctionDeclaration(node) && node.parent === source && node.name && node.parameters.length === 1 && node.body && inSelection(node)) {
       const parameter = node.parameters[0].name.getText(source);
-      const [setup, loop, returned] = node.body.statements;
+      const statements = [...node.body.statements];
+      const first = statements[0];
+      if (first && ts.isIfStatement(first)) {
+        const guard = first.expression.getText(source).replace(/\s/g, "");
+        const returnStatement = ts.isBlock(first.thenStatement) ? first.thenStatement.statements[0] : first.thenStatement;
+        if ([`${parameter}.length===0`, `${parameter}.length==0`, `!${parameter}.length`].includes(guard) && returnStatement && ts.isReturnStatement(returnStatement) && returnStatement.expression && ts.isNumericLiteral(returnStatement.expression) && returnStatement.expression.text === "0") statements.shift();
+      }
+      const [setup, loop, returned] = statements;
       const declaration = setup && ts.isVariableStatement(setup) ? setup.declarationList.declarations[0] : undefined;
       const accumulator = declaration?.name.getText(source);
-      const loopBody = loop && ts.isForStatement(loop) && ts.isBlock(loop.statement) ? loop.statement.statements : [];
+      const loopBody = loop && (ts.isForStatement(loop) || ts.isForOfStatement(loop)) && ts.isBlock(loop.statement) ? loop.statement.statements : [];
       const expression = loopBody.length === 1 && ts.isExpressionStatement(loopBody[0]) ? loopBody[0].expression : undefined;
-      const accumulation = expression && ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken && expression.left.getText(source) === accumulator && ts.isElementAccessExpression(expression.right) && expression.right.expression.getText(source) === parameter;
-      if (node.body.statements.length === 3 && declaration?.initializer && ts.isNumericLiteral(declaration.initializer) && declaration.initializer.text === "0" && accumulation && returned && ts.isReturnStatement(returned) && returned.expression?.getText(source) === accumulator) {
+      const forOfValue = loop && ts.isForOfStatement(loop) && loop.expression.getText(source) === parameter && ts.isVariableDeclarationList(loop.initializer) ? loop.initializer.declarations[0]?.name.getText(source) : undefined;
+      const accumulation = expression && ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken && expression.left.getText(source) === accumulator && (ts.isElementAccessExpression(expression.right) && expression.right.expression.getText(source) === parameter || forOfValue && expression.right.getText(source) === forOfValue);
+      if (statements.length === 3 && declaration?.initializer && ts.isNumericLiteral(declaration.initializer) && declaration.initializer.text === "0" && accumulation && returned && ts.isReturnStatement(returned) && returned.expression?.getText(source) === accumulator) {
         const cases: [string, string, number[], string][] = [["Normal", "normal", [1, 2, 3], "Checks accumulation across several elements."], ["Empty", "empty", [], "An empty sum should preserve the additive identity, zero."], ["Single element", "minimum", [5], "Exposes a boundary error on the smallest nonempty array."], ["Duplicates", "duplicate", [2, 2, 2], "Each repeated value should contribute to the sum."], ["Negative values", "negative", [-3, -2, 1], "Checks addition of signed numbers."], ["Zero boundary", "boundary", [0], "Checks that zero is handled as a value."], ["Large input", "large input", Array.from({ length: 1000 }, (_, index) => index), "Checks a larger input without assuming a fixed array size."]];
         for (const [name, category, input, reason] of cases) tests.push({ id: `${node.name.text}:${category}`, name, category, functionName: node.name.text, args: [input], expected: input.reduce((total, number) => total + number, 0), reason, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1 });
       }

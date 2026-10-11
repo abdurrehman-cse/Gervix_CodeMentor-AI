@@ -29,13 +29,21 @@ export function validateAnalysis(value: unknown, context: MentorContext): AIAnal
   const active = context.files.find(file => file.path === context.activeFile)!;
   const source = ts.createSourceFile(active.path, active.content, ts.ScriptTarget.Latest, true);
   const functionNames = new Set<string>();
+  const signatures = new Map<string, { minimum: number; maximum: number }>();
+  function remember(name: string, parameters: ts.NodeArray<ts.ParameterDeclaration>) {
+    functionNames.add(name);
+    const runtimeParameters = parameters.filter(parameter => !ts.isIdentifier(parameter.name) || parameter.name.text !== "this");
+    signatures.set(name, { minimum: runtimeParameters.reduce((minimum, parameter, index) => !parameter.questionToken && !parameter.initializer && !parameter.dotDotDotToken ? index + 1 : minimum, 0), maximum: runtimeParameters.some(parameter => parameter.dotDotDotToken) ? Infinity : runtimeParameters.length });
+  }
   for (const statement of source.statements) {
-    if (ts.isFunctionDeclaration(statement) && statement.name) functionNames.add(statement.name.text);
-    if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) if (ts.isIdentifier(declaration.name) && declaration.initializer && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) functionNames.add(declaration.name.text);
+    if (ts.isFunctionDeclaration(statement) && statement.name) remember(statement.name.text, statement.parameters);
+    if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) if (ts.isIdentifier(declaration.name) && declaration.initializer && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) remember(declaration.name.text, declaration.initializer.parameters);
   }
   const tests = value.tests.map((item, index) => {
     if (!record(item) || !["name", "category", "functionName", "reason"].every(key => string(item[key])) || !/^[A-Za-z_$][\w$]*$/.test(String(item.functionName)) || !Array.isArray(item.args) || !("expected" in item) || !integer(item.line)) throw new Error("Invalid test");
     if (!functionNames.has(String(item.functionName)) || Number(item.line) > active.content.split("\n").length || !jsonValue(item.args) || !jsonValue(item.expected)) throw new Error("Test does not match an executable function or JSON contract");
+    const signature = signatures.get(String(item.functionName))!;
+    if (item.args.length > signature.maximum || item.category !== "invalid" && item.args.length < signature.minimum) throw new Error("Test arguments do not match the submitted function signature");
     return { ...item, id: `test:${index}` } as TestCase;
   });
   const complexity = value.complexity;

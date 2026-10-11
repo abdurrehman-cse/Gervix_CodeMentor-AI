@@ -42,7 +42,17 @@ Explorer supports inline file/folder creation and rename, custom delete confirma
 
 Execution supports standalone JavaScript and TypeScript functions, including async returned promises. Imports/exports are currently rejected by the runner, while mentoring and compiler checks understand virtual project imports. Code runs in a worker inside an opaque sandboxed iframe with network access blocked by CSP, bounded console output, cancellation, and a three-second timeout. Student code is never executed on the server. This MVP limits execution time and output, not process-level memory; it is intended for local student exercises.
 
-## Verification
+## Version-aware review
+
+Use **Submit for Review** to capture an immutable workspace snapshot and analyze that exact code. Save also records meaningful changes. Identical submissions reuse the previous version; **Resubmit unchanged** deliberately creates another version. SHA-256 hashes, submission IDs, timestamps, workspace versions, and per-file versions identify the source of each diagnostic, hint container, complexity report, generated test, and actual test result.
+
+The compact status shows **Analysis current · vN** or **Code changed · Analysis outdated**. Editing relevant files invalidates diagnostics and fixes; obsolete generated tests remain visibly labeled but cannot accidentally run against newer drafts. **Reanalyze Latest Code** supersedes older requests. Unrelated files do not invalidate results when the analyzed file and its detected imports remain unchanged. Named files in mentor questions are included; dynamic imports use conservative workspace scope.
+
+**Version History** displays submissions, review status, checksums, and readable line diffs. Compare any two submissions, run their original generated tests against their saved code, or restore a snapshot. Restore requires confirmation, first saves all current drafts as a backup version, then creates a new restore version and working state. History is locally persisted and validated on refresh. The MVP retains up to 100 submissions and 200 review records per submission; storage errors preserve working code and show an in-app warning. A secure context (HTTPS or localhost) is required for browser hashing.
+
+Demo: submit the sample as v1, inspect its boundary hint and failing tests; change `<=` to `<` and rename the loop index, then submit v2; add `if (numbers.length === 0) return 0;` and replace the indexed loop with `for (const number of numbers) { total += number; }`, then submit v3. Generate fresh tests, run them, inspect O(n)/O(1) estimates, and compare v2/v3. The automated version smoke test also holds an older response until v3 finishes, verifies it cannot overwrite v3, and verifies safe restoration of unsaved drafts.
+
+## Verification commands
 
 ```sh
 cd backend
@@ -55,6 +65,6 @@ npm run build
 
 The Editor menu runs Monaco's Find, Replace, Go to Line, Format Document, Command Palette, and problem navigation commands. Ctrl/Cmd+F finds, Ctrl/Cmd+H replaces, Ctrl/Cmd+G goes to a line, Shift+Alt+F formats, F1 or Ctrl/Cmd+Shift+P opens the command palette, and F8/Shift+F8 navigates diagnostics. Selected-code guidance uses the actual editor range, including columns, without changing code. The toolbar reserves its space so selection never changes editor geometry mid-drag.
 
-Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs` checks the mentor flow, `node scripts/explorer-smoke.cjs` checks file operations and persistence, and `node scripts/editor-smoke.cjs` checks real mouse selection, clipboard operations, editor commands, contextual requests, and tab/view-state stability. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
+Optional browser smoke verification uses Playwright supplied by your environment: `node scripts/browser-smoke.cjs` checks the mentor flow, `node scripts/explorer-smoke.cjs` checks file operations and persistence, `node scripts/editor-smoke.cjs` checks mouse selection and editor reliability, and `node scripts/version-smoke.cjs` verifies the three-version review flow, stale-request rejection, historical comparisons and tests, refresh, and safe restore. Set `CODEMENTOR_PLAYWRIGHT` to an installed Playwright package path if it is not installed locally, and `CODEMENTOR_URL` to the running app URL. Screenshots go to ignored `frontend/test-artifacts/`. See `docs/architecture.md` and `docs/verification.md`.
 
 Hackathon rules supplied by the organizer require project creation during the official 24-hour period. Treat this advance scaffold as practice unless organizers allow reuse.
