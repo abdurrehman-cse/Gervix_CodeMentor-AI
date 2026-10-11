@@ -1,5 +1,14 @@
 # Verification status
 
+## Free-only AI routing
+
+- `npm test`: 54 tests pass. New checks cover free-only routing, exclusion of custom/paid providers, supported-model validation, mistyped cost flags, native Gemma source-context/response validation, hidden thought filtering, and quota failover to Groq JSON with no paid API calls.
+- `AI_FREE_ONLY=true` is enabled in the ignored demo environment. It uses Google's free-only Gemma 4 model with the existing Google key; a separately supplied Groq Free Plan key enables independent fallback. The routing policy cannot change a Groq account's billing plan.
+- Live model discovery confirmed `gemma-4-26b-a4b-it` and `gemma-4-31b-it` with `generateContent` support. Live probes encountered upstream HTTP 500 responses or timeouts. These were not treated as successful free AI reviews. Local recovery remains explicitly labeled; Groq has not been live-tested without a Groq key.
+- A subsequent native Gemma 4 request succeeded and returned a validated off-by-one diagnosis at line 3 using the existing Google key. No safe automatic fix was supplied in that response; unsafe or mismatched fix ranges remain rejected rather than silently applied.
+- For free-only public verification add `CODEMENTOR_REQUIRE_FREE=1` to the cloud smoke command. `CODEMENTOR_ALLOW_LOCAL_FALLBACK=1` permits only explicitly labeled recovery; it does not claim successful cloud inference.
+- The updated public HTTPS smoke passed with the free-only assertion enabled: the v1 cloud request timed out and used labeled local diagnostics, its previewed fix created v2, and Gemma 4 generated six fresh tests for v2 which all passed in the actual sandbox. No paid provider was used.
+
 ## Cloud demo and provider recovery
 
 - `npm test`: 49 tests pass, including provider failover after HTTP failures or malformed analysis, cancellation without retries, explicitly labeled local recovery, and public-demo traffic limits.

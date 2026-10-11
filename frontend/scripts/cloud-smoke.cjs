@@ -33,16 +33,34 @@ async function main() {
     let response = page.waitForResponse(result => result.url().endsWith("/api/mentor") && result.request().method() === "POST");
     await frame.getByRole("button", { name: "Submit for Review", exact: true }).click();
     let result = await readAnalysis(response);
-    assert.ok(["OpenAI", "Gemini", "AI provider"].includes(result.provider) || process.env.CODEMENTOR_ALLOW_LOCAL_FALLBACK === "1" && result.provider === "Local checks · cloud AI unavailable", JSON.stringify(result));
+    assert.ok(["OpenAI", "Gemini", "AI provider", "Gemma 4 (free)", "Groq"].includes(result.provider) || process.env.CODEMENTOR_ALLOW_LOCAL_FALLBACK === "1" && result.provider === "Local checks · cloud AI unavailable", JSON.stringify(result));
+    if (process.env.CODEMENTOR_REQUIRE_FREE === "1") assert.ok(["Gemma 4 (free)", "Groq", "Local checks · cloud AI unavailable"].includes(result.provider), "A paid provider must not be used in free-only mode");
     assert.ok(result.problems.some(problem => problem.line === 3));
     assert.equal(result.provenance.version, 1);
     await frame.locator(".review-status").getByText("Analysis current · v1", { exact: true }).waitFor();
     console.log(`PASS ${result.provider} versioned boundary diagnosis`);
-    await frame.getByRole("button", { name: "Quick Fix", exact: true }).click();
-    await page.getByRole("button", { name: "Apply Fix", exact: true }).click();
+    const quickFix = frame.getByRole("button", { name: "Quick Fix", exact: true });
+    let correction = "previewed quick fix";
+    if (await quickFix.count()) {
+      await quickFix.click();
+      await page.getByRole("button", { name: "Apply Fix", exact: true }).click();
+    } else {
+      correction = "student boundary correction (no safe AI fix supplied)";
+      await frame.evaluate(() => {
+        const editor = window.codeMentorWorkbench.editor();
+        const model = editor.getModel();
+        const index = model.getValue().indexOf("<=");
+        if (index < 0) throw new Error("The expected sample boundary condition is missing");
+        const start = model.getPositionAt(index), end = model.getPositionAt(index + 2);
+        editor.pushUndoStop();
+        editor.executeEdits("student-correction", [{ range: { startLineNumber: start.lineNumber, startColumn: start.column, endLineNumber: end.lineNumber, endColumn: end.column }, text: "<" }]);
+        editor.pushUndoStop();
+      });
+    }
     response = page.waitForResponse(item => item.url().endsWith("/api/mentor") && item.request().method() === "POST");
     await frame.locator(".mentor .coming").getByRole("button", { name: "Generate Test Cases", exact: false }).click();
     result = await readAnalysis(response);
+    if (process.env.CODEMENTOR_REQUIRE_FREE === "1") assert.ok(["Gemma 4 (free)", "Groq", "Local checks · cloud AI unavailable"].includes(result.provider), "Paid test generation is disabled in free-only mode");
     assert.ok(result.tests.length > 0, JSON.stringify(result));
     assert.equal(result.provenance.version, 2);
     await frame.getByRole("button", { name: "Run Tests", exact: true }).click();
@@ -53,7 +71,7 @@ async function main() {
     fs.mkdirSync("test-artifacts", { recursive: true });
     await page.screenshot({ path: "test-artifacts/cloud-workbench.png", fullPage: true });
     assert.deepEqual(errors, []);
-    console.log(`PASS public workbench, isolated workers, ${result.provider} analysis, versioned quick fix, ${counts[2]} actual sandbox tests`);
+    console.log(`PASS public workbench, isolated workers, ${result.provider} analysis, versioned ${correction}, ${counts[2]} actual sandbox tests`);
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
