@@ -29,7 +29,7 @@ async function main() {
   async function requestDelete(name) { await tree(name).click({ button: "right" }); await page.getByRole("menuitem", { name: "Delete", exact: true }).click(); await page.getByRole("dialog", { name: /^Delete/ }).waitFor(); }
   async function editorState() { await page.locator(".monaco-editor .view-lines").waitFor(); return page.evaluate(() => new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("Editor inspection timed out")), 10000); window.require(["vs/editor/editor.main"], monaco => { clearTimeout(timer); const instance = monaco.editor.getEditors().find(editor => editor.getModel()); resolve({ uri: instance.getModel().uri.toString(), code: instance.getValue(), selection: instance.getSelection().toString(), language: instance.getModel().getLanguageId() }); }, reject); })); }
   try {
-    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000", { waitUntil: "domcontentloaded" });
+    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000/?classic", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Beginner", exact: false }).click();
     await page.locator(".monaco-editor .view-lines").waitFor();
     await page.getByRole("button", { name: "New file or folder" }).click();

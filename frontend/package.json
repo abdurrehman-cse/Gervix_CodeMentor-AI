@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "node scripts/prepare-monaco.cjs",
+    "predev": "node scripts/prepare-monaco.cjs && node scripts/prepare-workbench.cjs",
     "dev": "next dev",
-    "prebuild": "node scripts/prepare-monaco.cjs",
+    "prebuild": "node scripts/prepare-monaco.cjs && node scripts/prepare-workbench.cjs",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && npm --prefix workbench run typecheck",
     "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {

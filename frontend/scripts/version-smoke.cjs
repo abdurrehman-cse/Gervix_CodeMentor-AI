@@ -19,7 +19,7 @@ async function main() {
   async function write(code) { await page.locator(".monaco-editor").click({ position: { x: 160, y: 70 } }); await page.keyboard.press("Control+KeyA"); await page.evaluate(code => navigator.clipboard.writeText(code), code); await page.keyboard.press("Control+KeyV"); await wait(async () => (await state()) === code, "Paste must update the working source"); await page.keyboard.press("Control+Home"); }
   async function submit(version) { await page.getByRole("button", { name: "Submit for Review", exact: true }).click(); await wait(async () => (await page.locator(".review-status").textContent()).includes(`Analysis current · v${version}`), `v${version} must finish against its snapshot`); }
   try {
-    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000");
+    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000/?classic");
     await page.getByRole("button", { name: "Beginner", exact: false }).click();
     await page.locator(".monaco-editor .view-lines").waitFor();
     const original = await state();

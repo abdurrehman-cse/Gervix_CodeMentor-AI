@@ -4,6 +4,8 @@ import "./workspace.css";
 import type { editor } from "monaco-editor";
 import Explorer, { type ExplorerHandle } from "../components/explorer/Explorer";
 import CodeEditor from "../components/editor/CodeEditor";
+import RealWorkbench from "../components/editor/RealWorkbench";
+import type { WorkbenchClient } from "../lib/workbench-bridge";
 import SelectionToolbar from "../components/editor/SelectionToolbar";
 import EditorTools from "../components/editor/EditorTools";
 import "../components/editor/editor.css";
@@ -23,6 +25,8 @@ import { canApplySnapshotFix, resultIsCurrent } from "../lib/versions/guards";
 import type { AIAnalysis, ChatMessage, Level, MentorContext, Problem, TestResult } from "../lib/types";
 type FileSession = { code: string; path: string; analysis: AIAnalysis; results: TestResult[]; output: string[]; analysisSnapshot?: string };
 export default function Home() {
+  const [classic, setClassic] = useState(false);
+  const workbenchRef = useRef<WorkbenchClient | null>(null);
   const workspace = useWorkspace();
   const versions = useVersions();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -46,7 +50,7 @@ export default function Home() {
   const [solution, setSolution] = useState(false);
   const [fix, setFix] = useState<Problem | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<editor.ICodeEditor | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const revision = useRef(0);
   const busyRef = useRef(false);
@@ -63,6 +67,7 @@ export default function Home() {
   const results = fresh ? (session?.results || []).filter(result => sameProvenance(result.provenance, session?.analysis.provenance)) : [];
   const supported = !!active && ["javascript", "typescript"].includes(language(active.path));
   useEffect(() => {
+    setClassic(new URLSearchParams(location.search).has("classic"));
     try { const saved = localStorage.getItem("codementor-level"); if (["beginner", "intermediate", "advanced"].includes(saved || "")) setLevel(saved as Level); const savedMode = localStorage.getItem("codementor-mode"); if (savedMode === "direct") setMode("direct"); } catch {}
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
     return () => abortRef.current?.abort();
@@ -83,6 +88,7 @@ export default function Home() {
   function choose(value: Level) { setLevel(value); try { localStorage.setItem("codementor-level", value); } catch {} }
   function jump(targetLine: number, column = 1) { const instance = editorRef.current; instance?.revealLineInCenter(targetLine); instance?.setPosition({ lineNumber: targetLine, column }); instance?.focus(); }
   function viewProblem(item: Problem) {
+    if (workbenchRef.current) void workbenchRef.current.show("mentor");
     const file = workspace.files.find(file => file.path === item.file);
     if (!file) return;
     if (file.id !== active?.id) {
@@ -95,14 +101,16 @@ export default function Home() {
     setSelectedId(item.id); setSolution(false); setTab("Problems");
   }
   function edit(code: string) { if (!workspace.edit(code)) return; revision.current++; abortRef.current?.abort(); setFix(null); setSolution(false); }
-  function context(action: string, question: string, submission: Submission, current = readEditorSelection(editorRef.current)): MentorContext {
-    const paths = relevantPaths(submission.files, active!.path, question);
-    const provenance = provenanceFor(submission, paths, active!.path);
+  function context(action: string, question: string, submission: Submission, current = readEditorSelection(editorRef.current), activePath = active?.path || submission.activeFile): MentorContext {
+    const paths = relevantPaths(submission.files, activePath, question);
+    const provenance = provenanceFor(submission, paths, activePath);
     const validPrevious = fresh && sameProvenance(analysis?.provenance, provenance);
-    return { action, question, files: submission.files.filter(file => file.kind === "folder" || paths.includes(file.path)).map(({ path, kind, content }) => ({ path, kind, content })), activeFile: active!.path, provenance, selection: current.selection, line: current.line, diagnostics: validPrevious ? analysis?.problems || [] : [], previousDiagnostics: validPrevious ? analysis?.problems || [] : [], output: fresh ? session?.output || [] : [], hintsUsed: { problemId: validPrevious ? problem?.id || "" : "", count: validPrevious ? hintCount : 0 }, tests: validPrevious ? analysis?.tests || [] : [], results: validPrevious ? results : [], complexity: validPrevious ? analysis?.complexity || null : null, messages: messages.filter(message => sameProvenance(message.provenance, provenance)).slice(-16), level: level || "beginner", mode };
+    return { action, question, files: submission.files.filter(file => file.kind === "folder" || paths.includes(file.path)).map(({ path, kind, content }) => ({ path, kind, content })), activeFile: activePath, provenance, selection: current.selection, line: current.line, diagnostics: validPrevious ? analysis?.problems || [] : [], previousDiagnostics: validPrevious ? analysis?.problems || [] : [], output: fresh && sameProvenance(session?.analysis.provenance, provenance) ? session?.output || [] : [], hintsUsed: { problemId: validPrevious ? problem?.id || "" : "", count: validPrevious ? hintCount : 0 }, tests: validPrevious ? analysis?.tests || [] : [], results: validPrevious ? results : [], complexity: validPrevious ? analysis?.complexity || null : null, messages: messages.filter(message => sameProvenance(message.provenance, provenance)).slice(-16), level: level || "beginner", mode };
   }
   async function ask(action: string, question = "", force = false, supersede = false) {
-    if (!active || busyRef.current && !supersede || !supported || !versions.ready) return;
+    const currentWorkspace = workspace.getSnapshot();
+    const active = currentWorkspace.files.find(file => file.id === currentWorkspace.activeId && file.kind === "file");
+    if (!active || busyRef.current && !supersede || !["javascript", "typescript"].includes(language(active.path)) || !versions.ready) return;
     abortRef.current?.abort();
     const requestId = ++requestSequence.current;
     const recordId = crypto.randomUUID();
@@ -118,7 +126,7 @@ export default function Home() {
       submission = await versions.capture(captured.files, active.path, "review", force);
       if (requestId !== requestSequence.current || controller.signal.aborted || requestRevision !== revision.current) return;
       setPendingSubmission(submission);
-      requestContext = context(action, question, submission, selectedCode);
+      requestContext = context(action, question, submission, selectedCode, active.path);
       versions.record(submission.id, { requestId: recordId, action, activeFile: active.path, status: "running" });
       if (question) setMessages(current => [...current, { role: "user", content: question, provenance: requestContext!.provenance }]);
       const response = await fetch("/api/mentor", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestContext), signal: controller.signal });
@@ -155,7 +163,7 @@ export default function Home() {
     else if (action === "fix" && item) setFix(item);
     else if (action === "hint") { if (readEditorSelection(editorRef.current).selection.text && !item) void ask("hint", "Give me the next progressive hint about the selected code."); else hint(item); }
     else if (action === "run") void run();
-    else if (action === "chat") { document.querySelector<HTMLTextAreaElement>(".mentor-chat textarea")?.focus(); }
+    else if (action === "chat") { if (workbenchRef.current) void workbenchRef.current.show("chat"); else document.querySelector<HTMLTextAreaElement>(".mentor-chat textarea")?.focus(); }
     else void ask(action, action === "explain" ? "Explain the selected code step by step." : action === "optimize" ? "Explain how to improve this code's efficiency and the tradeoffs. Teach me before suggesting changes." : "");
   }
   async function editorCommand(command: string) {
@@ -235,6 +243,24 @@ export default function Home() {
     if (!file || !submittedAnalysis || !provenanceMatches(provenance, submission, submission.files) || submittedAnalysis.tests.some(test => !sameProvenance(test.provenance, provenance))) throw new Error("No valid executable tests exist for this snapshot. Generate fresh tests.");
     const result = await runCode(file.content, file.path, submittedAnalysis.tests);
     versions.record(submission.id, { requestId: crypto.randomUUID(), action: "run submitted tests", activeFile: file.path, status: "complete", analysis: submittedAnalysis, results: result.results.map(item => ({ ...item, provenance })) });
+  }
+  if (!classic) {
+    const panelProps = { onTab: setTab, analysis, output: fresh ? session?.output || [] : [], results, onProblem: viewProblem, onLine: jump, onRunTests: () => void run(true), onGenerate: () => void ask("tests"), busy: !!busy || !supported, testsCurrent: fresh };
+    const status = busy ? `Review running${pendingSubmission ? ` · v${pendingSubmission.version}` : ""}` : sourceSubmission && analysis ? fresh ? `Analysis current · v${sourceSubmission.version}` : "Code changed · Analysis outdated" : "Working draft · Not reviewed";
+    return <main><header><strong><span className="logo">〈/〉</span> CodeMentor <em>AI</em></strong><span className="muted">VS Code workbench · Your thinking. A little guidance.</span><button className="mode-button" onClick={() => { const next = mode === "learning" ? "direct" : "learning"; setMode(next); try { localStorage.setItem("codementor-mode", next); } catch {} }}>{mode === "learning" ? "Learning mode" : "Direct mode"}</button><button onClick={() => setLevel(null)}>{level || "Choose level"} ⚙</button></header>
+      {workspace.ready && <RealWorkbench snapshot={{ files: workspace.files, tabs: workspace.tabs, activeId: workspace.activeId, modelGeneration: workspace.modelGeneration }} problems={analysis?.problems || []} output={panelProps.output} status={status} panel={tab} onReady={client => { workbenchRef.current = client; editorRef.current = client.editor() as editor.ICodeEditor | null; }} host={{
+        snapshot: () => ({ ...workspace.getSnapshot(), modelGeneration: workspace.modelGeneration }),
+        mutate: operation => { const before = workspaceSignature(workspace.getSnapshot().files); const result = workspace.nativeOperation(operation); if (result.ok && before !== workspaceSignature(workspace.getSnapshot().files)) { revision.current++; abortRef.current?.abort(); setFix(null); setSolution(false); } return result; },
+        tabs: workspace.syncTabs,
+        selection: (next, currentLine) => { editorRef.current = workbenchRef.current?.editor() as editor.ICodeEditor | null; setSelection(current => JSON.stringify(current) === JSON.stringify(next) ? current : next); setLine(currentLine); },
+        action: (action, id) => { if (active?.id !== workspace.getSnapshot().activeId) { setError("The file is still opening. Try the mentor action again once the tab is ready."); return; } editorRef.current = workbenchRef.current?.editor() as editor.ICodeEditor | null; if (action === "history") setHistoryOpen(true); else if (action === "resubmit") void ask("analyze", "", true, true); else if (action === "runTests") void run(true); else editorAction(action, analysis?.problems.find(item => item.id === id)); },
+        saved: path => { const current = workspace.getSnapshot(); if (versions.ready) void versions.capture(current.files, path, "save").catch(() => setError("The file is saved, but its version could not be recorded.")); },
+        error: setError
+      }} mentor={<><ReviewStatus submission={busy && pendingSubmission?.activeFile === active?.path ? pendingSubmission : analysis ? sourceSubmission : undefined} current={fresh && analysis?.provider !== "Isolated browser runner"} busy={busy} disabled={!supported || !versions.ready || !level} onSubmit={force => void ask("analyze", "", force, true)} onHistory={() => { setFix(null); setHistoryOpen(true); }}/><MentorPanel analysis={analysis} problem={problem} busy={busy} error={error || workspace.storageError || versions.error} hintCount={hintCount} messages={messages} onAction={(action, question) => void ask(action, question)} onProblem={viewProblem} onHint={() => hint()} onFix={() => setFix(problem)} onSolution={() => setSolution(true)} onCancel={() => abortRef.current?.abort()} canAnalyze={versions.ready && supported && !!level && !!active?.content.trim()} showSolution={solution} onRun={() => void run()} onSave={() => void workbenchRef.current?.save().catch(() => setError("The file could not be saved."))} onDownload={workspace.download}/></>} tests={<BottomPanel {...panelProps} tab="Tests"/>} complexity={<BottomPanel {...panelProps} tab="Complexity"/>}/>}
+      {fix?.quickFix && <div className="overlay" onKeyDown={event => { if (event.key === "Escape") setFix(null); }}><section className="onboarding fix-dialog" role="dialog" aria-modal="true" aria-labelledby="fix-title"><h2 id="fix-title">Preview Quick Fix</h2><p>{fix.file} · Line {fix.line}. Only this range will change.</p><pre className="diff removed">− {fix.quickFix.oldCode}</pre><pre className="diff added">+ {fix.quickFix.newCode}</pre><div className="inline-actions"><button autoFocus className="primary" onClick={applyFix}>Apply Fix</button><button onClick={() => setFix(null)}>Cancel</button></div></section></div>}
+      {workspace.ready && !level && <div className="overlay"><section className="onboarding" role="dialog" aria-modal="true" aria-labelledby="welcome"><h2 id="welcome">Where are you on your coding journey?</h2>{(["beginner", "intermediate", "advanced"] as Level[]).map((value, index) => <button autoFocus={index === 0} key={value} onClick={() => choose(value)}><strong>{["Beginner", "Intermediate", "Advanced"][index]}</strong><span>{["Explain concepts step by step with gentle hints.", "Let me work out the fix.", "Give me a minimal clue."][index]}</span></button>)}</section></div>}
+      {historyOpen && <VersionHistory history={versions.history} files={workspace.files} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} onRun={runSubmittedTests}/>}
+    </main>;
   }
   return <main><header><strong><span className="logo">〈/〉</span> CodeMentor <em>AI</em></strong><span className="muted">Your thinking. A little guidance.</span><button className="mode-button" onClick={() => { const next = mode === "learning" ? "direct" : "learning"; setMode(next); try { localStorage.setItem("codementor-mode", next); } catch {} }}>{mode === "learning" ? "Learning mode" : "Direct mode"}</button><button onClick={() => setLevel(null)}>{level || "Choose level"} ⚙</button></header>
     <div className={`workspace ${workspace.collapsed ? "sidebar-collapsed" : ""}`}><nav className="activity" aria-label="Workspace tools"><button title="Toggle Explorer" aria-label="Toggle Explorer" aria-expanded={!workspace.collapsed} onClick={() => { workspace.setCollapsed(!workspace.collapsed); setSearch(false); }}>▤</button><button title="Search workspace" aria-label="Search workspace" onClick={() => { workspace.setCollapsed(false); setSearch(true); }}>⌕</button><button title="Problems" aria-label="Problems" onClick={() => setTab("Problems")}>⚑</button><button title="Tests" aria-label="Tests" onClick={() => setTab("Tests")}>✓</button></nav><div className="explorer-slot" aria-hidden={workspace.collapsed} inert={workspace.collapsed}><Explorer ref={explorerRef} files={workspace.files} activeId={workspace.activeId} selectedId={workspace.selectedId} closedIds={workspace.closedIds} ready={workspace.ready} onSelect={workspace.select} onToggle={workspace.toggleFolder} onOpen={workspace.open} onCreate={workspace.create} onRename={workspace.rename} onDelete={workspace.remove} search={search}/></div>

@@ -1,5 +1,16 @@
 # Verification status
 
+## Native workbench integration
+
+- Strict TypeScript checks pass for both Next and the isolated VS Code/Vite package. The production build includes native workbench services, bundled browser JS/TS language extensions and worker assets. No lint script is configured.
+- `npm test`: 46 tests pass, including atomic native file writes/moves/deletes, draft preservation, collision/traversal rejection and delayed-save protection.
+- `frontend/scripts/workbench-smoke.cjs` passes on the production application: real workbench parts; mouse selection and exact selected AI context; provenance-aware review, hints and guarded fixes; actual sandbox tests and console output; complexity; palette and clipboard; native nested creation/save/rename; refresh; unsaved folder rename; custom delete warnings, cancellation and recursive tab cleanup; confirmed version restore with backup and no orphaned tabs. No native browser dialogs or page runtime errors were observed.
+- All four original browser suites also pass using `/?classic`, against the same workspace/history controller and APIs. Their default URLs now select that compatibility route; use the new workbench smoke suite for the default native interface.
+- `go test ./...` passes in `backend`.
+- Published dependency versions, Node/Vite compatibility, upstream full-workbench/custom-view examples, interactive demo, MIT licensing and Theia's architecture were checked before integration. See `docs/workbench-integration.md` for the decision, deployment requirements and deliberate runtime limitations.
+
+## Original workspace coverage
+
 - `npm test`: 42 passing tests covering exact diagnostic/fix coordinates, observed sample test failures and corrections, comment/string false positives, selection coordinates, syntax and null/name errors, virtual imports, named-file mentoring, storage validation, cost estimates, AI adapter failures/cancellation, atomic file operations, reserved/invalid names, duplicates, nested creation, draft-preserving rename, descendant deletion, stale references, capacity limits, corrupted-data restoration, live editor range snapshots, exact same-line selection filtering, selected-function complexity, and malformed column rejection. Version tests additionally cover immutable ordered snapshots, deduplication and explicit resubmission, SHA-256 checksums, per-file versions, added/modified/renamed/deleted changes, bounded diffs, dependency-aware invalidation, slow/aborted request guards, full-file stale-fix rejection, artifact provenance, validated history/results restoration, and runtime function signatures.
 - `npm run typecheck`: strict TypeScript checks pass. No lint command is configured in this project.
 - `npm run build`: production compilation and strict TypeScript checks pass; `/`, `/api/mentor`, and `/api/compile` are generated.

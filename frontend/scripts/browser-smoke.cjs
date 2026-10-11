@@ -19,7 +19,7 @@ async function main() {
   const artifactDir = path.join(__dirname, "../test-artifacts");
   fs.mkdirSync(artifactDir, { recursive: true });
   try {
-    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000", { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000/?classic", { waitUntil: "domcontentloaded", timeout: 120000 });
     console.log("Loaded:", page.url());
     await page.getByRole("button", { name: "Beginner", exact: false }).click();
     await page.locator(".monaco-editor .view-lines").waitFor();

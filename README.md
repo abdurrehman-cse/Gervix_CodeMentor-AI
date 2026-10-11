@@ -1,10 +1,10 @@
 # CodeMentor AI
 
-An educational coding workspace built on the original Next.js interface. Monaco, a persistent virtual filesystem, contextual mentoring, exact diagnostics, progressive hints, targeted fix previews, isolated execution, tests, and complexity estimates work together to teach the reasoning behind a correction.
+An educational coding workspace using the real open-source VS Code browser workbench inside the existing Next.js application. A persistent virtual filesystem, contextual mentoring, exact diagnostics, progressive hints, targeted fix previews, isolated execution, tests, and complexity estimates teach the reasoning behind a correction.
 
 ## Run
 
-Requirements: Node.js 20.9+ and Go 1.22+.
+Requirements: Node.js 20.19+ or 22.12+, and optionally Go 1.22+.
 
 ```sh
 cd frontend
@@ -13,7 +13,7 @@ npm run dev
 ```
 Open http://localhost:3000 and choose your experience level. The frontend now serves its own mentor and compilation endpoints; the Go backend is optional and retains the original `/api/analyze` and `/api/health` endpoints.
 
-For production: `npm run build` then `npm start`. Monaco assets are copied from the installed dependency before development and build; no editor CDN is required. PWA installation needs HTTPS (or localhost). The service worker provides a reconnect screen, not a fully offline app.
+For production: `npm run build` then `npm start`. The actual VS Code web workbench is built by a separately locked Vite package before development and production builds; no editor CDN is required. The existing Next AI APIs, files, drafts and version history are preserved. Mentor, tests and complexity are native custom workbench views. See `docs/workbench-integration.md` for architecture, licensing, deployment headers and limitations. The previous interface remains at `/?classic`. PWA installation needs HTTPS (or localhost). The service worker provides a reconnect screen, not a fully offline app.
 
 ## AI configuration
 

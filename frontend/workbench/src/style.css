@@ -1,0 +1,42 @@
+html,body,#workbench{height:100%;width:100%;margin:0;overflow:hidden}
+.codementor-view{height:100%;color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:13px}
+.codementor-view .mentor{padding:16px;border:0;overflow:visible}
+.codementor-view h1{font-size:25px;margin:18px 0 8px}
+.codementor-view h3{font-size:14px}
+.codementor-view h4{font-size:11px;text-transform:uppercase;color:#b1a4d1}
+.codementor-view button{font:inherit;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);border:1px solid var(--vscode-widget-border,#444);border-radius:3px;padding:7px 10px;cursor:pointer}
+.codementor-view button:hover{background:var(--vscode-button-secondaryHoverBackground)}
+.codementor-view button:disabled{opacity:.5;cursor:default}
+.codementor-view button:focus-visible{outline:1px solid var(--vscode-focusBorder)}
+.codementor-view .primary{background:#b5a0ff;color:#171320;font-weight:bold}
+.codementor-view .mentor>button,.codementor-view .coming>button,.codementor-view .mentor-chat form button{width:100%;margin:6px 0}
+.codementor-view p{line-height:1.6;font-size:12px}
+.codementor-view .muted,.codementor-view small{color:var(--vscode-descriptionForeground)}
+.codementor-view .eyebrow{font-size:10px;letter-spacing:1px}
+.codementor-view .pill{font-size:8px;padding:4px;background:#383047;color:#c7b7ff}
+.codementor-view .error{color:var(--vscode-errorForeground)}
+.codementor-view .accent{color:#c7b7ff}
+.codementor-view .inline-actions{display:flex;gap:6px;flex-wrap:wrap}
+.codementor-view .problem-card{display:flex;flex-direction:column;gap:7px;width:100%;text-align:left;margin:8px 0}
+.codementor-view .problem-card.selected{border-color:#b5a0ff}
+.codementor-view .hint{padding:10px;background:#30293f;border-left:2px solid #b5a0ff;margin:10px 0}
+.codementor-view article,.codementor-view .coming,.codementor-view .mentor-chat{border-top:1px solid var(--vscode-widget-border,#444);padding-top:12px;margin-top:15px}
+.codementor-view textarea{box-sizing:border-box;width:100%;resize:vertical;font:inherit;padding:8px;color:var(--vscode-input-foreground);background:var(--vscode-input-background);border:1px solid var(--vscode-input-border,#444)}
+.codementor-view .chat-message{padding:9px;background:var(--vscode-textBlockQuote-background);margin:7px 0}
+.codementor-view .prewrap,.codementor-view pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.codementor-view .review-status{padding:10px;display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #444}
+.codementor-view .review-status button{font-size:11px}
+.codementor-view .review-version{width:100%;font-size:11px}
+.codementor-view .bottom-panel{height:auto!important;border:0}
+.codementor-view .panel-resizer,.codementor-view .panel-tabs{display:none}
+.codementor-view .panel-body{padding:14px}
+.codementor-view .test-case{padding:10px 0;border-bottom:1px solid #444}
+.codementor-view .test-case summary{cursor:pointer}
+.codementor-view .metrics{display:flex;gap:32px}
+.codementor-view .metrics>div{display:flex;flex-direction:column;gap:8px}
+.codementor-view .metrics strong{font-size:23px;color:#c7b7ff}
+.codementor-view .growth{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.codementor-view .growth span{padding:5px;border:1px solid #444}
+.codementor-view .growth .selected{background:#383047;border-color:#b5a0ff}
+.codementor-view table{border-collapse:collapse;margin:12px 0}
+.codementor-view td,.codementor-view th{padding:6px 12px;text-align:left;border-bottom:1px solid #444}

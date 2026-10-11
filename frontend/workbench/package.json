@@ -1,0 +1,40 @@
+{
+  "name": "codementor-workbench",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codingame/monaco-vscode-api": "37.3.11",
+    "@codingame/monaco-vscode-configuration-service-override": "37.3.11",
+    "@codingame/monaco-vscode-dialogs-service-override": "37.3.11",
+    "@codingame/monaco-vscode-explorer-service-override": "37.3.11",
+    "@codingame/monaco-vscode-javascript-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-json-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-languages-service-override": "37.3.11",
+    "@codingame/monaco-vscode-markdown-basics-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-markers-service-override": "37.3.11",
+    "@codingame/monaco-vscode-model-service-override": "37.3.11",
+    "@codingame/monaco-vscode-notifications-service-override": "37.3.11",
+    "@codingame/monaco-vscode-output-service-override": "37.3.11",
+    "@codingame/monaco-vscode-preferences-service-override": "37.3.11",
+    "@codingame/monaco-vscode-search-service-override": "37.3.11",
+    "@codingame/monaco-vscode-storage-service-override": "37.3.11",
+    "@codingame/monaco-vscode-textmate-service-override": "37.3.11",
+    "@codingame/monaco-vscode-theme-defaults-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-theme-service-override": "37.3.11",
+    "@codingame/monaco-vscode-theme-seti-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-typescript-basics-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-typescript-language-features-default-extension": "37.3.11",
+    "@codingame/monaco-vscode-workbench-service-override": "37.3.11",
+    "@codingame/monaco-vscode-working-copy-service-override": "37.3.11",
+    "monaco-editor": "npm:@codingame/monaco-vscode-editor-api@37.3.11",
+    "vscode": "npm:@codingame/monaco-vscode-extension-api@37.3.11"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "7.3.1"
+  }
+}

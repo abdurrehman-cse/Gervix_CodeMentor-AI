@@ -58,7 +58,7 @@ async function main() {
   }
   async function menu(name) { await page.getByRole("button", { name: "Editor actions", exact: true }).click(); await page.getByRole("menuitem", { name, exact: false }).click(); }
   try {
-    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000", { waitUntil: "domcontentloaded" });
+    await page.goto(process.env.CODEMENTOR_URL || "http://localhost:3000/?classic", { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Beginner", exact: false }).click();
     await page.locator(".monaco-editor .view-lines").waitFor();
     const code = ["function runTests() {", "  const results = [];", "", "  " + "/" + "/ Trace every iteration, including the boundary.", ...Array.from({ length: 15 }, (_, index) => `  results.push(${index});`), "", "  return results;", "}"].join("\n");

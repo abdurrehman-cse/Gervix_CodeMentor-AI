@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { FileNode } from "./types";
+import { workbenchOperation, type WorkbenchOperation } from "./workbench-operations";
 import { createItem, deleteItem, initialWorkspace, renameItem, restoreWorkspace, type WorkspaceResult, type WorkspaceState } from "./workspace-operations";
 
 export function useWorkspace() {
@@ -74,5 +75,12 @@ export function useWorkspace() {
     const url = URL.createObjectURL(new Blob([active.content], { type: "text/plain" }));
     const link = document.createElement("a"); link.href = url; link.download = active.path.split("/").at(-1)!; link.click(); URL.revokeObjectURL(url);
   }
-  return { ...state, active, ready, storageError, modelGeneration, setCollapsed, open, close, select, toggleFolder, create, rename, remove, edit, save, download, replaceFiles, getSnapshot: () => snapshot.current };
+  function nativeOperation(request: WorkbenchOperation) { return operation(workbenchOperation(snapshot.current, request)); }
+  function syncTabs(paths: string[], activePath?: string) {
+    const current = snapshot.current;
+    const tabs = paths.map(path => current.files.find(file => file.path === path && file.kind === "file")?.id).filter((id): id is string => !!id);
+    const activeId = activePath !== undefined ? current.files.find(file => file.path === activePath && file.kind === "file")?.id || "" : tabs.includes(current.activeId) ? current.activeId : tabs[0] || "";
+    if (JSON.stringify(tabs) !== JSON.stringify(current.tabs) || activeId !== current.activeId) update({ ...current, tabs: [...new Set(tabs)], activeId, selectedId: activeId });
+  }
+  return { ...state, active, ready, storageError, modelGeneration, setCollapsed, open, close, select, toggleFolder, create, rename, remove, edit, save, download, replaceFiles, nativeOperation, syncTabs, getSnapshot: () => snapshot.current };
 }
