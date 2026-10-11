@@ -3,6 +3,7 @@ import { getMentorAnalysis } from "../../../lib/ai/provider";
 import { validContext } from "../../../lib/ai/context";
 import { attachProvenance, contentHash } from "../../../lib/versions/snapshots";
 import { validateAnalysis } from "../../../lib/ai-validation";
+import { acquireMentorRequest } from "../../../lib/ai/request-limits";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
@@ -18,7 +19,10 @@ export async function POST(request: Request) {
       for (const file of context.files.filter(file => file.kind === "file")) if (source.files[file.path] !== await contentHash(file.content)) return NextResponse.json({ error: "Snapshot checksum mismatch." }, { status: 400 });
       if (Object.keys(source.files).length !== context.files.filter(file => file.kind === "file").length) return NextResponse.json({ error: "Snapshot files do not match provenance." }, { status: 400 });
     }
-    const generated = await getMentorAnalysis(context, request.signal);
+    const release = acquireMentorRequest();
+    if (!release) return NextResponse.json({ error: "The mentor is busy. Please wait a minute and retry; your code is safe." }, { status: 429, headers: { "Retry-After": "60" } });
+    let generated;
+    try { generated = await getMentorAnalysis(context, request.signal); } finally { release(); }
     const analysis = { ...validateAnalysis(generated, context), provider: generated.provider };
     return NextResponse.json(context.provenance ? attachProvenance(analysis, context.provenance) : analysis);
   } catch (error) {

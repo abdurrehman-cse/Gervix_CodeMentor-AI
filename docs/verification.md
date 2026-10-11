@@ -1,5 +1,14 @@
 # Verification status
 
+## Cloud demo and provider recovery
+
+- `npm test`: 49 tests pass, including provider failover after HTTP failures or malformed analysis, cancellation without retries, explicitly labeled local recovery, and public-demo traffic limits.
+- The final production build and strict Next TypeScript checks pass. The isolated workbench TypeScript checks also pass; its package has not changed in this deployment update.
+- Credentials are stored only in ignored `frontend/.env.local`. A scan of all 120 generated public assets confirms neither configured API key appears in the client bundle. Only placeholder configuration is tracked.
+- Live probes reported OpenAI `429 credit_balance_exhausted`. Gemini initially produced valid structured boundary diagnostics, then intermittently returned unavailable responses or timed out. Billing and upstream availability cannot be repaired by application code. The demo enables explicit limited local compiler/AST recovery rather than presenting invented cloud analysis.
+- `frontend/scripts/cloud-smoke.cjs` verifies the public workbench, isolated extension workers, version-bound diagnosis and fix, and actual sandbox test execution. Set `CODEMENTOR_URL` to the tunnel URL and `CODEMENTOR_PLAYWRIGHT` to the installed Playwright package. By default the check requires a real cloud provider; `CODEMENTOR_ALLOW_LOCAL_FALLBACK=1` explicitly permits and reports the labeled offline path.
+- The public HTTPS smoke passed: genuine workbench and isolated workers loaded, Gemini diagnosed v1's boundary error, the previewed fix created v2, and explicitly labeled local recovery generated seven tests which all passed in the actual sandbox. The subsequent cloud test-generation request was unavailable, so that step was not reported as successful Gemini generation.
+
 ## Native workbench integration
 
 - Strict TypeScript checks pass for both Next and the isolated VS Code/Vite package. The production build includes native workbench services, bundled browser JS/TS language extensions and worker assets. No lint script is configured.

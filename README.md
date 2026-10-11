@@ -27,6 +27,12 @@ AI_MODEL=your-provider-model
 
 The adapter expects a Chat Completions compatible endpoint supporting JSON output. Credentials stay on the server. Requests explicitly send workspace source, selections, conversation, diagnostics, and results to the configured provider. Responses are validated against real file coordinates and callable function names. Provider failures do not rewrite code or report invented results.
 
+Alternatively set `OPENAI_API_KEY` with `OPENAI_MODEL=gpt-4.1-mini`, and/or `GEMINI_API_KEY` with `GEMINI_MODEL=gemini-flash-latest`. The server tries a custom provider first, then OpenAI, then Gemini's OpenAI-compatible JSON endpoint. Network errors, timeouts, and invalid structured output trigger failover; user cancellation never does. Chat Completions providers have a 15-second timeout, Gemini has 30 seconds, and the entire chain is limited to 50 seconds. If every configured provider fails, the UI shows an error, not fake successful analysis. Optionally set `AI_LOCAL_FALLBACK=true` to use actual compiler/AST-based checks after cloud failures; the mentor explicitly labels these limited local checks and cloud unavailability. They are not semantic AI analysis or a correctness guarantee. `.env.local` is ignored by Git; never use public environment variables for secrets. The temporary demo server caps mentor traffic at four concurrent requests and 30 requests per minute per server process; this is not production authentication or distributed rate limiting.
+
+## Temporary Cloudflare demo
+
+Run `npm run build` and `npm run start -- -H 127.0.0.1 -p 3008` in `frontend`, then `cloudflared tunnel --url http://127.0.0.1:3008 --no-autoupdate`. Share the HTTPS `trycloudflare.com` URL printed by Cloudflare. The computer, app server, and tunnel must remain running. This is a temporary public demo, not permanent hosting; stop the tunnel when finished and set provider spending limits. Workspace data remains local to each visitor's browser. Use a named tunnel with access controls for restricted or permanent deployment.
+
 Without credentials, the app clearly labels local checks: compiler diagnostics, supported AST rules, source-derived explanations and hints, sum-contract tests, and conservative complexity estimates. General semantic reasoning and broad test generation require the configured provider. Local checks do not prove correctness.
 
 ## Demo and controls
